@@ -2,11 +2,11 @@
   "Network": {
     "seed": 1
   },
-  "display_stats_freq": 1,
+  "display_stats_freq": 10,
   "valid_iteration_freq": 4,
   "input_data_path": "/home/soroosh/Documents/Repositories/deep_learning_challenge/Assignment4/data/images/",
   "network_output_path": "./data/network_data/",
-  "network_save_freq": 5,
+  "network_save_freq": 50,
   "output_data_path": "./data/output_data/",
   "tb_logs_path": "./data/tensor_board_logs/",
   "trained_model_name": "trained_model.pth"

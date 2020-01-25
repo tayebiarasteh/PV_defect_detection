@@ -1,8 +1,8 @@
-from data import get_validation_dataset
+from data.data import get_validation_dataset
 import numpy as np
-import torch as t
+import torch
 
-train_dl = t.utils.data.DataLoader(get_validation_dataset(), batch_size=1)
+train_dl = torch.utils.data.DataLoader(get_validation_dataset(), batch_size=1)
 
 a = 0.0
 s = np.zeros(3)

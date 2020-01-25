@@ -12,12 +12,11 @@ import os
 # Deep Learning Modules
 from tensorboardX import SummaryWriter
 import torch
-import torch.nn.functional as F
 import torch.nn as nn
 
 # User Defined Modules
-# from configs.serde import *
-from evaluation import create_evaluation
+from configs.serde import *
+# from evaluation import create_evaluation
 import pdb
 
 
@@ -78,6 +77,7 @@ class Training:
         write_config(self.params, self.cfg_path, sort_keys=True)
 
     def add_tensorboard_graph(self, model):
+        #todo
         '''Creates a tensor board graph for network visualisation'''
         dummy_input = torch.rand(1, 256).long()  # To show tensor sizes in graph
         dummy_hidden = torch.rand(1, 256, 1024)  # To show tensor sizes in graph
@@ -110,10 +110,10 @@ class Training:
                 print('Testing:')
                 self.test_epoch(test_loader)
 
-        '''Saving the model'''
-        # Saving every epoch
-        # torch.save(self.model.state_dict(), self.params['network_output_path'] +
-        #            "/epoch_" + str(self.epoch) + '_' + self.params['trained_model_name'])
+            '''Saving the model'''
+            # Saving every epoch
+            # torch.save(self.model.state_dict(), self.params['network_output_path'] +
+            #            "/epoch_" + str(self.epoch) + '_' + self.params['trained_model_name'])
         # Saving the last epoch
         # torch.save(self.model.state_dict(), self.params['network_output_path'] +
         # "/" + self.params['trained_model_name'])
@@ -122,8 +122,9 @@ class Training:
         self.model_info['num_steps'] = self.epoch
         self.model_info['trained_time'] = "{:%B %d, %Y, %H:%M:%S}".format(datetime.datetime.now())
         self.params['Network'] = self.model_info
-
         write_config(self.params, self.cfg_path, sort_keys=True)
+
+
 
     def train_epoch(self, train_loader):
         '''
@@ -137,20 +138,17 @@ class Training:
         batch_count = 0
         batch_accuracy = 0
 
-        # initializing hidden states
-        hidden_units = self.model.initialize_hidden_state(self.device)
-
-        for batch, (message, label) in enumerate(train_loader):
-            message = message.long()
+        for batch, (image, label) in enumerate(train_loader):
+            image = image.long()
             label = label.long()
-            message = message.to(self.device)
+            image = image.to(self.device)
             label = label.to(self.device)
 
             # Forward pass.
             self.optimiser.zero_grad()
 
             with torch.set_grad_enabled(True):
-                output, hidden_unit = self.model(message.permute(1, 0), hidden_units)
+                output, hidden_unit = self.model(image)
 
                 # Loss & converting from one-hot encoding to class indices
                 loss = self.loss_function(output, torch.max(label, 1)[1])
@@ -161,7 +159,7 @@ class Training:
                 # number of correct message predictions
                 corrects = (torch.max(output, 1)[1].data == torch.max(label, 1)[1]).sum()
                 # Accuracy
-                batch_accuracy += 100.0 * corrects / len(output)
+                batch_accuracy += corrects / len(output)
 
                 # Backward and optimize
                 loss.backward()
@@ -182,6 +180,8 @@ class Training:
         print('Epoch {} -- Train Acc. {}'.format(
             self.epoch + 1, train_accuracy / (batch + 1)))
 
+
+
     def test_epoch(self, test_loader):
         '''Test (validation) model after an epoch and calculate loss on test dataset'''
         self.model.eval()
@@ -193,15 +193,13 @@ class Training:
             batch_count = 0
             batch_accuracy = 0
 
-            hidden_units = self.model.initialize_hidden_state(self.device)
-
-            for batch, (message, label) in enumerate(test_loader):
-                message = message.long()
+            for batch, (image, label) in enumerate(test_loader):
+                image = image.long()
                 label = label.long()
-                message = message.to(self.device)
+                image = image.to(self.device)
                 label = label.to(self.device)
 
-                output, hidden_units = self.model(message.permute(1, 0), hidden_units)
+                output, hidden_units = self.model(image)
 
                 # Loss & converting from one-hot encoding to class indices
                 loss = self.loss_function(output, torch.max(label, 1)[1])
@@ -212,7 +210,7 @@ class Training:
                 # number of correct message predictions
                 corrects = (torch.max(output, 1)[1].data == torch.max(label, 1)[1]).sum()
                 # Accuracy
-                batch_accuracy += 100.0 * corrects / len(output)
+                batch_accuracy += corrects / len(output)
 
                 if batch % 5 == 0:
                     print('Epoch {} Batch {} Loss {}'.format(self.epoch + 1, batch, total_loss / batch_count))
@@ -225,8 +223,9 @@ class Training:
         # Print accuracy after each epoch
         print('Epoch {} -- Test Acc. {}'.format(
             self.epoch + 1, test_accuracy / (batch + 1)))
-
         self.model.train()
+
+
 
     def calculate_tb_stats(self, batch_loss, batch_accuracy, is_train=True):
         '''
@@ -247,6 +246,8 @@ class Training:
             self.writer.add_histogram(f'{name}.grad', param.grad, self.step)
         self.step += 1
 
+
+
     def load_pretrained_model(self):
         '''Load pre trained model to the using pre-trained_model_path parameter from config file'''
         self.model.load_state_dict(torch.load(self.model_info['pretrain_model_path']))
@@ -260,34 +261,35 @@ class Training:
                         "               again.".format(self.model_info['trained_time']))
 
 
+
 class Training2:
     
-    def __init__(self,               
-                 model,                # Model to be trained.
-                 crit,                 # Loss function
-                 optim = None,         # Optimiser
-                 train_dl = None,      # Training data set
-                 val_test_dl = None,   # Validation (or test) data set
-                 cuda = True,          # Whether to use the GPU
-                 early_stopping_cb = None): # The stopping criterion. 
-        self._model = model
-        self._crit = crit
-        self._optim = optim
-        self._train_dl = train_dl
-        self._val_test_dl = val_test_dl
-        self._cuda = cuda
+    # def __init__(self,
+    #              model,                # Model to be trained.
+    #              crit,                 # Loss function
+    #              optim = None,         # Optimiser
+    #              train_dl = None,      # Training data set
+    #              val_test_dl = None,   # Validation (or test) data set
+    #              cuda = True,          # Whether to use the GPU
+    #              early_stopping_cb = None): # The stopping criterion.
+    #     self._model = model
+    #     self._crit = crit
+    #     self._optim = optim
+    #     self._train_dl = train_dl
+    #     self._val_test_dl = val_test_dl
+    #     self._cuda = cuda
         self._early_stopping_cb = early_stopping_cb
         
-        if cuda:
-            self._model = model.cuda()
-            self._crit = crit.cuda()
-            
-    def save_checkpoint(self, epoch):
-        t.save({'state_dict': self._model.state_dict()}, 'checkpoints/checkpoint_{:03d}.ckp'.format(epoch))
-    
-    def restore_checkpoint(self, epoch_n):
-        ckp = t.load('checkpoints/checkpoint_{:03d}.ckp'.format(epoch_n), 'cuda' if self._cuda else None)
-        self._model.load_state_dict(ckp['state_dict'])
+    #     if cuda:
+    #         self._model = model.cuda()
+    #         self._crit = crit.cuda()
+    #
+    # def save_checkpoint(self, epoch):
+    #     t.save({'state_dict': self._model.state_dict()}, 'checkpoints/checkpoint_{:03d}.ckp'.format(epoch))
+    #
+    # def restore_checkpoint(self, epoch_n):
+    #     ckp = t.load('checkpoints/checkpoint_{:03d}.ckp'.format(epoch_n), 'cuda' if self._cuda else None)
+    #     self._model.load_state_dict(ckp['state_dict'])
         
     def save_onnx(self, fn):
         m = self._model.cpu()
@@ -305,44 +307,40 @@ class Training2:
               dynamic_axes={'input' : {0 : 'batch_size'},    # variable lenght axes
                             'output' : {0 : 'batch_size'}})
             
-    def train_step(self, x, y):
-        # perform following steps:
-        # -reset the gradients
-        # -propagate through the network
-        # -calculate the loss
-        # -compute gradient by backward propagation
-        # -update weights
-        # -return the loss
-        #TODO
-        
-        
-    
-    def val_test_step(self, x, y):
-        
-        # predict
-        # propagate through the network and calculate the loss and predictions
-        # return the loss and the predictions
-        #TODO
-        
-    def train_epoch(self):
-        # set training mode
-        # iterate through the training set
-        # transfer the batch to "cuda()" -> the gpu if a gpu is given
-        # perform a training step
-        # calculate the average loss for the epoch and return it
-        #TODO
-    
-    def val_test(self):
-        # set eval mode
-        # disable gradient computation
-        # iterate through the validation set
-        # transfer the batch to the gpu if given
-        # perform a validation step
-        # save the predictions and the labels for each batch
-        # calculate the average loss and average metrics of your choice. You might want to calculate these metrics in designated functions
-        # return the loss and print the calculated metrics
-        #TODO
-        
+    # def train_step(self, x, y):
+    #     # perform following steps:
+    #     # -reset the gradients
+    #     # -propagate through the network
+    #     # -calculate the loss
+    #     # -compute gradient by backward propagation
+    #     # -update weights
+    #     # -return the loss
+    #
+    #
+    #
+    # def val_test_step(self, x, y):
+    #
+    #     # predict
+    #     # propagate through the network and calculate the loss and predictions
+    #     # return the loss and the predictions
+    #
+    # def train_epoch(self):
+    #     # set training mode
+    #     # iterate through the training set
+    #     # transfer the batch to "cuda()" -> the gpu if a gpu is given
+    #     # perform a training step
+    #     # calculate the average loss for the epoch and return it
+    #
+    # def val_test(self):
+    #     # set eval mode
+    #     # disable gradient computation
+    #     # iterate through the validation set
+    #     # transfer the batch to the gpu if given
+    #     # perform a validation step
+    #     # save the predictions and the labels for each batch
+    #     # calculate the average loss and average metrics of your choice. You might want to calculate these metrics in designated functions
+    #     # return the loss and print the calculated metrics
+
     
     def fit(self, epochs=-1):
         assert self._early_stopping_cb is not None or epochs > 0
