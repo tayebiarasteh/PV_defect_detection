@@ -1,9 +1,27 @@
-import torch as t
-from sklearn.metrics import f1_score
-from tqdm.autonotebook import tqdm
-from evaluation import create_evaluation
+"""
+@author: Soroosh Tayebi Arasteh <soroosh.arasteh@fau.de>
+"""
 
-class Trainer:
+#System Modules
+from enum import Enum
+import datetime
+from tqdm.autonotebook import tqdm
+from sklearn.metrics import f1_score
+
+# Deep Learning Modules
+from tensorboardX import SummaryWriter
+import torch
+import torch.nn.functional as F
+import torch.nn as nn
+
+# User Defined Modules
+# from configs.serde import *
+from evaluation import create_evaluation
+import pdb
+
+
+
+class Training:
     
     def __init__(self,               
                  model,                # Model to be trained.
@@ -101,7 +119,17 @@ class Trainer:
             # check whether early stopping should be performed using the early stopping callback and stop if so
             # return the loss lists for both training and validation
         #TODO
-                    
-        
-        
-        
+
+
+
+
+
+class Mode(Enum):
+    '''
+    Class Enumerating the 3 modes of operation of the network.
+    This is used while loading datasets
+    '''
+
+    TRAIN = 0
+    VALID = 1
+    PREDICT = 2
