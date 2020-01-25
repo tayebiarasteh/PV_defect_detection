@@ -11,7 +11,7 @@ import torch.optim as optim
 
 # User Defined Modules
 # from configs.serde import *
-from Train_Test import Training
+from Train_Test_Valid import Training
 # from models.RNN import *
 from data.data import get_train_dataset, get_validation_dataset
 from stopping import EarlyStoppingCallback
