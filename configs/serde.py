@@ -10,7 +10,7 @@ import warnings
 import shutil
 
 
-CONFIG_PATH = '/home/soroosh/Documents/Repositories/deep_learning_challenge/Assignment4/configs/config.json'
+CONFIG_PATH = '/home/soroosh/Documents/Repositories/deep_learning_challenge/configs/config.json'
 
 
 def read_config(cfg_path):
