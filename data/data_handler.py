@@ -4,7 +4,7 @@
 
 from torch.utils.data import Dataset
 import torch
-import pandas as pd
+import csv
 from skimage.io import imread
 from skimage.color import gray2rgb
 import numpy as np
@@ -22,7 +22,7 @@ epsilon = 1e-15
 
 
 class ChallengeDataset(Dataset):
-    def __init__(self, cfg_path, valid_split_ratio=0.2, transforms=transforms.Compose(transforms.ToTensor()), mode=Mode.TRAIN, seed=42):
+    def __init__(self, cfg_path, valid_split_ratio=0.2, transform=transforms.Compose(transforms.ToTensor()), mode=Mode.TRAIN, seed=42):
         '''
         Args:
             cfg_path (string):
@@ -35,10 +35,21 @@ class ChallengeDataset(Dataset):
                 Default value: Mode.TRAIN
         '''
         params = read_config(cfg_path)
+        self.input_data_path = params['input_data_path']
         self.cfg_path = cfg_path
         self.mode = mode
-        self.transforms = transforms
-        self.input_list = pd.read_csv(params['input_csv_path'], delimiter=';')
+        self.transform = transform
+
+        self.input_list = []
+        self.sum_crack = 0
+        self.sum_inactive = 0
+
+        with open(params['input_csv_path']) as csv_file:
+            reader = csv.DictReader(csv_file, delimiter=';')
+            for row in reader:
+                self.input_list.append(row)
+                self.sum_crack += int(row['crack'])
+                self.sum_inactive += int(row['inactive'])
         self.train_list, self.valid_list = train_test_split(self.input_list, test_size=valid_split_ratio, random_state=seed)
 
 
@@ -59,23 +70,22 @@ class ChallengeDataset(Dataset):
         elif self.mode==Mode.VALID:
             output_list = self.valid_list
 
-        label_temp = np.asarray(output_list.loc[output_list['filename'] == output_list['filename'][idx]])[0, 2:]
         label = np.zeros((2), dtype=int)
-        label[0] = label_temp[0]
-        label[1] = label_temp[1]
+        label[0] = int(output_list[idx]['crack'])
+        label[1] = int(output_list[idx]['inactive'])
 
         # Reads images using files name available in the list
-        image = imread(os.path.join('data', output_list['filename'][idx]))
+        image = imread(os.path.join(self.input_data_path, output_list[idx]['filename']))
         image = gray2rgb(image)
-        image = self.transforms(image)
+        image = self.transform(image)
         label = torch.from_numpy(label)
         return image, label
 
 
     def pos_weight(self):
         '''Calculates a weight for positive examples for each class and returns it as a tensor'''
-        w_crack = torch.tensor((1 - self.input_list['crack'].sum()) / (self.input_list['crack'].sum() + epsilon))
-        w_inactive = torch.tensor((1 - self.input_list['inactive'].sum()) / (self.input_list['inactive'].sum() + epsilon))
+        w_crack = torch.tensor((len(self.input_list) - self.sum_crack) / (self.sum_crack + epsilon))
+        w_inactive = torch.tensor((len(self.input_list) - self.sum_inactive) / (self.sum_inactive + epsilon))
         return w_crack, w_inactive
 
 
@@ -83,18 +93,18 @@ class ChallengeDataset(Dataset):
 def get_train_dataset(cfg_path, valid_split_ratio):
     # since all the images are 300 * 300, we don't need resizing
     trans = transforms.Compose([transforms.ToPILImage(), transforms.ToTensor(), transforms.Normalize(train_mean, train_std)])
-    return ChallengeDataset(cfg_path=cfg_path, valid_split_ratio=valid_split_ratio, transforms=trans, mode=Mode.TRAIN)
+    return ChallengeDataset(cfg_path=cfg_path, valid_split_ratio=valid_split_ratio, transform=trans, mode=Mode.TRAIN)
 
 # without augmentation
 def get_validation_dataset(cfg_path, valid_split_ratio):
     trans = transforms.Compose([transforms.ToPILImage(), transforms.ToTensor()])
-    return ChallengeDataset(cfg_path=cfg_path, valid_split_ratio=valid_split_ratio, transforms=trans, mode=Mode.VALID)
+    return ChallengeDataset(cfg_path=cfg_path, valid_split_ratio=valid_split_ratio, transform=trans, mode=Mode.VALID)
 
 
 
 
 if __name__ == '__main__':
     CONFIG_PATH = '/home/soroosh/Documents/Repositories/deep_learning_challenge/configs/config.json'
-    dataset = ChallengeDataset(cfg_path=CONFIG_PATH, valid_split_ratio=0.2, mode=Mode.TRAIN, seed=1)
+    dataset = get_train_dataset(CONFIG_PATH, valid_split_ratio=0.2)
     # pdb.set_trace()
     # a=5

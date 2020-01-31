@@ -14,3 +14,4 @@
 /data/__pycache__/
 /models/__pycache__/
 /data/network_data/
+/data/tensor_board_logs/
