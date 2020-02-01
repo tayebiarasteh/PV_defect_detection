@@ -14,6 +14,8 @@ from tensorboardX import SummaryWriter
 import torch
 import torch.nn as nn
 from sklearn import metrics
+from sklearn.metrics import multilabel_confusion_matrix
+import torch.nn.functional as F
 
 # User Defined Modules
 from configs.serde import *
@@ -54,7 +56,7 @@ class Training:
         else:
             self.device = torch.device('cpu')
 
-    def setup_model(self, model, optimiser, optimiser_params, loss_function, weight_ratio):
+    def setup_model(self, model, optimiser, optimiser_params, loss_function, pos_weight=None):
         '''
         :param model: an object of our network
         :param optimiser: an object of our optimizer, e.g. torch.optim.SGD
@@ -68,8 +70,7 @@ class Training:
 
         self.model = model.to(self.device)
         self.optimiser = optimiser(self.model.parameters(), **optimiser_params)
-        # loss_weight=torch.tensor([1,weight_ratio],dtype=torch.float).to(self.device)
-        self.loss_function = loss_function(weight=loss_weight, reduction='none')
+        self.loss_function = loss_function(pos_weight=pos_weight.to(self.device))
 
         if 'retrain' in self.model_info and self.model_info['retrain'] == True:
             self.load_pretrained_model()
@@ -84,9 +85,8 @@ class Training:
 
 
     def add_tensorboard_graph(self, model):
-        #todo
         '''Creates a tensor board graph for network visualisation'''
-        dummy_input = torch.rand(1, 256).long()  # To show tensor sizes in graph
+        dummy_input = torch.rand(1, 3, 300, 300)  # To show tensor sizes in graph
         self.writer.add_graph(model, dummy_input)
 
 
@@ -174,8 +174,8 @@ class Training:
         f1_score = 0
 
         for idx, (image, label) in enumerate(train_loader):
-            image = image.float()
-            label = label.long()
+            # image = image.float()
+            # label = label.long()
             image = image.to(self.device)
             label = label.to(self.device)
 
@@ -184,6 +184,10 @@ class Training:
 
             with torch.set_grad_enabled(True):
                 output = self.model(image)
+                output = output[:,:,0,0]
+                label = label.float()
+                output_sigmoided = F.sigmoid(output)
+                output_sigmoided = (output_sigmoided > 0.5).float()
 
                 # Loss
                 loss = self.loss_function(output, label)
@@ -192,24 +196,18 @@ class Training:
                 batch_count += 1
 
                 '''Metrics calculation'''
-                max_preds = output.argmax(dim=1, keepdim=True)  # get the index of the max probability
+                #TODO: multi-label metrics
 
-                # Accuracy
-                correct = max_preds.squeeze(1).eq(label)
-                batch_accuracy += (correct.sum() / torch.FloatTensor([label.shape[0]])).item()
-                total_accuracy += (correct.sum() / torch.FloatTensor([label.shape[0]])).item()
+                # [[TN, FP],[FN, TP]] for each class
+                crack_confusion, inactive_confusion = multilabel_confusion_matrix(label.cpu(), output_sigmoided.cpu())
 
-                max_preds = max_preds.cpu()
-                label = label.cpu()
+                # accuracy = (TP + TN) / (TP + TN + FP + FN + epsilon)
+                # specificity = TN / (TN + FN + epsilon)
+                # sensitivity = TP / (TP + FN + epsilon)
+                # precision = TP / (TP + FP + epsilon)
+                # F1 = (2 * precision * sensitivity / (precision + sensitivity + epsilon))
 
-                # F1 Score
-                f1_score += metrics.f1_score(label, max_preds, average='micro')
-                total_f1_score += metrics.f1_score(label, max_preds, average='micro')
-
-                # # Precision
-                # precision += metrics.precision_score(label, max_preds, average='micro')
-                # # Recall
-                # recall += metrics.recall_score(label, max_preds, average='micro')
+                pdb.set_trace()
 
                 #Backward and optimize
                 loss.backward()
@@ -252,11 +250,15 @@ class Training:
             f1_score = 0
 
             for idx, (image, label) in enumerate(valid_loader):
-                image = image.float()
-                label = label.long()
+                # image = image.float()
+                # label = label.long()
                 image = image.to(self.device)
                 label = label.to(self.device)
-                output = self.model(image).squeeze(1)
+                output = self.model(image)
+                output = output[:,:,0,0]
+                label = label.float()
+                output_sigmoided = F.sigmoid(output)
+                output_sigmoided = (output_sigmoided > 0.5).float()
 
                 # Loss
                 loss = self.loss_function(output, label)
@@ -265,23 +267,20 @@ class Training:
                 batch_count += 1
 
                 '''Metrics calculation'''
-                max_preds = output.argmax(dim=1, keepdim=True)  # get the index of the max probability
+                #TODO: multi-label metrics
 
-                # Accuracy
-                correct = max_preds.squeeze(1).eq(label)
-                batch_accuracy += (correct.sum() / torch.FloatTensor([label.shape[0]])).item()
-                total_accuracy += (correct.sum() / torch.FloatTensor([label.shape[0]])).item()
+                # [[TN, FP],[FN, TP]] for each class
+                crack_confusion, inactive_confusion = multilabel_confusion_matrix(label.cpu(), output_sigmoided.cpu())
 
-                max_preds = max_preds.cpu()
-                label = label.cpu()
-
-                # F1 Score
-                f1_score += metrics.f1_score(label, max_preds, average='micro')
-                total_f1_score += metrics.f1_score(label, max_preds, average='micro')
+                # accuracy = (TP + TN) / (TP + TN + FP + FN + epsilon)
+                # specificity = TN / (TN + FN + epsilon)
+                # sensitivity = TP / (TP + FN + epsilon)
+                # precision = TP / (TP + FP + epsilon)
+                # F1 = (2 * precision * sensitivity / (precision + sensitivity + epsilon))
 
                 # Prints loss statistics and writes to the tensorboard after number of steps specified.
                 if (idx + 1) % self.params['display_stats_freq'] == 0:
-                    print('Epoch {:02} | Batch {:03}-{:03} | Train loss: {:.3f} | Train F1: {:.3f}'.
+                    print('Epoch {:02} | Batch {:03}-{:03} | Val. loss: {:.3f} | Val. F1: {:.3f}'.
                           format(self.epoch + 1, previous_idx, idx, batch_loss / batch_count, f1_score / batch_count))
                     previous_idx = idx + 1
                     self.tb_val_step += 1
