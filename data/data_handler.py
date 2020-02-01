@@ -86,7 +86,11 @@ class ChallengeDataset(Dataset):
         '''Calculates a weight for positive examples for each class and returns it as a tensor'''
         w_crack = torch.tensor((len(self.input_list) - self.sum_crack) / (self.sum_crack + epsilon))
         w_inactive = torch.tensor((len(self.input_list) - self.sum_inactive) / (self.sum_inactive + epsilon))
-        return w_crack, w_inactive
+        output_tensor = torch.zeros((2))
+        output_tensor[0] = w_crack
+        output_tensor[1] = w_inactive
+
+        return output_tensor
 
 
 
