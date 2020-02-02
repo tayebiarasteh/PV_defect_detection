@@ -19,3 +19,4 @@
 /utils/multilabel_classification.pdf
 /models/UNet.py
 /models/resnet_official.py
+/utils/__pycache__/

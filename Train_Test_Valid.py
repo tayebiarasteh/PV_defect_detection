@@ -19,11 +19,12 @@ import torch.nn.functional as F
 
 # User Defined Modules
 from configs.serde import *
-from stopping import EarlyStoppingCallback
+from utils.stopping import EarlyStoppingCallback
 # from evaluation import create_evaluation
 import pdb
 os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
 epsilon = 1e-15
+
 
 
 class Training:
@@ -181,6 +182,7 @@ class Training:
         total_f1_score = 0
         f1_score = 0
 
+        # initializing the caches
         logits_with_sigmoid_cache = torch.from_numpy(np.zeros((len(train_loader) * 4, 2)))
         logits_no_sigmoid_cache = torch.from_numpy(np.zeros((len(train_loader) * 4, 2)))
         labels_cache = torch.from_numpy(np.zeros_like(logits_with_sigmoid_cache))
@@ -209,10 +211,10 @@ class Training:
 
                 # Loss
                 loss = self.loss_function(output, label)
-                # batch_loss += loss.item()
-                # total_loss += loss.item()
-                # batch_count += 1
-                #
+                batch_loss += loss.item()
+                total_loss += loss.item()
+                batch_count += 1
+
                 # '''Metrics calculation (macro)'''
                 # # [[TN, FP],
                 # # [FN, TP]] for each class
@@ -241,23 +243,24 @@ class Training:
                 loss.backward()
                 self.optimiser.step()
 
-                # # Prints loss statistics and writes to the tensorboard after number of steps specified.
-                # if (idx + 1)%self.params['display_stats_freq'] == 0:
-                #     print('Epoch {:02} | Batch {:03}-{:03} | Train loss: {:.3f} | Train F1: {:.3f}'.
-                #           format(self.epoch + 1, previous_idx, idx, batch_loss / batch_count, f1_score / batch_count))
-                #     previous_idx = idx + 1
-                #     self.tb_train_step += 1
-                #     self.calculate_tb_stats(batch_loss / batch_count, batch_accuracy / batch_count,
-                #                             f1_score / batch_count, is_train=True)
-                #     batch_loss = 0
-                #     batch_count = 0
-                #     batch_accuracy = 0
-                #     f1_score = 0
+                # Prints loss statistics and writes to the tensorboard after number of steps specified.
+                if (idx + 1)%self.params['display_stats_freq'] == 0:
+                    print('Epoch {:02} | Batch {:03}-{:03} | Train loss: {:.3f} | Train F1: {:.3f}'.
+                          format(self.epoch + 1, previous_idx, idx, batch_loss / batch_count, f1_score / batch_count))
+                    previous_idx = idx + 1
+                    self.tb_train_step += 1
+                    self.calculate_tb_stats(batch_loss / batch_count, batch_accuracy / batch_count,
+                                            f1_score / batch_count, is_train=True)
+                    batch_loss = 0
+                    batch_count = 0
+                    batch_accuracy = 0
+                    f1_score = 0
 
         # epoch_accuracy = total_accuracy / len(train_loader)
-        # epoch_loss = total_loss / len(train_loader)
+        epoch_loss = total_loss / len(train_loader)
         # epoch_f1_score  = total_f1_score / len(train_loader)
 
+        # Metrics calculation over the whole set
         crack_confusion, inactive_confusion = multilabel_confusion_matrix(labels_cache.cpu(), logits_with_sigmoid_cache.cpu())
 
         TN = crack_confusion[0, 0]
@@ -276,8 +279,8 @@ class Training:
 
         epoch_accuracy = (accuracy_1 + accuracy_2) / 2
         epoch_f1_score = (F1_1 + F1_2) / 2
-        loss = self.loss_function(logits_no_sigmoid_cache.to(self.device), labels_cache.to(self.device))
-        epoch_loss = loss.item()
+        # loss = self.loss_function(logits_no_sigmoid_cache.to(self.device), labels_cache.to(self.device))
+        # epoch_loss = loss.item()
 
         return epoch_loss, epoch_accuracy, epoch_f1_score
 
@@ -319,12 +322,12 @@ class Training:
                 for i, batch in enumerate(label):
                     labels_cache[idx * 4 + i] = batch
 
-                # # Loss
-                # loss = self.loss_function(output, label)
-                # batch_loss += loss.item()
-                # total_loss += loss.item()
-                # batch_count += 1
-                #
+                # Loss
+                loss = self.loss_function(output, label)
+                batch_loss += loss.item()
+                total_loss += loss.item()
+                batch_count += 1
+
                 # '''Metrics calculation'''
                 # # [[TN, FP],
                 # # [FN, TP]] for each class
@@ -349,21 +352,21 @@ class Training:
                 # f1_score += (F1_1 + F1_2) / 2
                 # total_f1_score += (F1_1 + F1_2) / 2
                 #
-                # # Prints loss statistics and writes to the tensorboard after number of steps specified.
-                # if (idx + 1) % self.params['display_stats_freq'] == 0:
-                #     print('Epoch {:02} | Batch {:03}-{:03} | Val. loss: {:.3f} | Val. F1: {:.3f}'.
-                #           format(self.epoch + 1, previous_idx, idx, batch_loss / batch_count, f1_score / batch_count))
-                #     previous_idx = idx + 1
-                #     self.tb_val_step += 1
-                #     self.calculate_tb_stats(batch_loss / batch_count, batch_accuracy / batch_count,
-                #                             f1_score / batch_count, is_train=False)
-                #     batch_loss = 0
-                #     batch_count = 0
-                #     batch_accuracy = 0
-                #     f1_score = 0
+                # Prints loss statistics and writes to the tensorboard after number of steps specified.
+                if (idx + 1) % self.params['display_stats_freq'] == 0:
+                    print('Epoch {:02} | Batch {:03}-{:03} | Val. loss: {:.3f} | Val. F1: {:.3f}'.
+                          format(self.epoch + 1, previous_idx, idx, batch_loss / batch_count, f1_score / batch_count))
+                    previous_idx = idx + 1
+                    self.tb_val_step += 1
+                    self.calculate_tb_stats(batch_loss / batch_count, batch_accuracy / batch_count,
+                                            f1_score / batch_count, is_train=False)
+                    batch_loss = 0
+                    batch_count = 0
+                    batch_accuracy = 0
+                    f1_score = 0
 
         # epoch_accuracy = total_accuracy / len(valid_loader)
-        # epoch_loss = total_loss / len(valid_loader)
+        epoch_loss = total_loss / len(valid_loader)
         # epoch_f1_score  = total_f1_score / len(valid_loader)
 
         crack_confusion, inactive_confusion = multilabel_confusion_matrix(labels_cache.cpu(), logits_with_sigmoid_cache.cpu())
@@ -384,8 +387,8 @@ class Training:
 
         epoch_accuracy = (accuracy_1 + accuracy_2) / 2
         epoch_f1_score = (F1_1 + F1_2) / 2
-        loss = self.loss_function(logits_no_sigmoid_cache.to(self.device), labels_cache.to(self.device))
-        epoch_loss = loss.item()
+        # loss = self.loss_function(logits_no_sigmoid_cache.to(self.device), labels_cache.to(self.device))
+        # epoch_loss = loss.item()
 
         self.model.train()
         return epoch_loss, epoch_accuracy, epoch_f1_score
