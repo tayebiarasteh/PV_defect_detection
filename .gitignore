@@ -16,3 +16,6 @@
 /data/network_data/
 /data/tensor_board_logs/
 /multilabel_classification.pdf
+/utils/multilabel_classification.pdf
+/models/UNet.py
+/models/resnet_official.py

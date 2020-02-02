@@ -31,7 +31,7 @@ class ChallengeDataset(Dataset):
                 train-valid splitting
             mode (enumeration Mode):
                 Nature of operation to be done with the data.
-                Possible inputs are Mode.PREDICTION, Mode.TRAIN, Mode.VALID, Mode.TEST
+                Possible inputs are Mode.TRAIN, Mode.VALID, Mode.TEST
                 Default value: Mode.TRAIN
         '''
         params = read_config(cfg_path)

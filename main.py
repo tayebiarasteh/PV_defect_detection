@@ -36,13 +36,13 @@ def main_train():
     LOSS_FUNCTION = BCEWithLogitsLoss
     OPTIMIZER = optim.Adam
     VALID_SPLIT_RATIO = 0.2
-    parameters = dict(lr = [5e-3], batch_size = [4])
+    parameters = dict(lr = [1e-2], batch_size = [4])
     param_values = [v for v in parameters.values()]
 
     '''Hyper-parameter testing'''
     for lr, BATCH_SIZE in product(*param_values):
         # put the new experiment name here.
-        params = create_experiment("Adam_lr" + str(lr))
+        params = create_experiment("new2Adam_lr" + str(lr))
         cfg_path = params["cfg_path"]
 
         '''Prepare data'''
@@ -54,7 +54,7 @@ def main_train():
         valid_loader = torch.utils.data.DataLoader(dataset=valid_dataset, batch_size=BATCH_SIZE,
                                                    drop_last=True, shuffle=False, num_workers=4)
         '''Initialize trainer'''
-        trainer = Training(cfg_path)
+        trainer = Training(cfg_path, stopping_patience=5)
         '''Define model parameters'''
         optimiser_params = {'lr': lr}
         MODEL = ResNet()
@@ -65,8 +65,6 @@ def main_train():
         trainer.execute_training(train_loader, valid_loader=valid_loader, num_epochs=NUM_EPOCH)
 
 
-
-# initialize the early stopping callback implemented in stopping.py and create a object of type Trainer
 
 
 def main_test():
@@ -80,7 +78,7 @@ def experiment_deleter():
     parameters = dict(lr = [5e-3], batch_size = [1])
     param_values = [v for v in parameters.values()]
     for lr, BATCH_SIZE in product(*param_values):
-        delete_experiment("Adam_lr" + str(lr))
+        delete_experiment("new2Adam_lr" + str(lr))
 
 
 

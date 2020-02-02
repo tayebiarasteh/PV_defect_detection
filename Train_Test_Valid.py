@@ -19,20 +19,23 @@ import torch.nn.functional as F
 
 # User Defined Modules
 from configs.serde import *
+from stopping import EarlyStoppingCallback
 # from evaluation import create_evaluation
 import pdb
 os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
 epsilon = 1e-15
 
+
 class Training:
     '''
     This class represents training process.
     '''
-
-    def __init__(self, cfg_path, torch_seed=None):
+    def __init__(self, cfg_path, stopping_patience, torch_seed=None):
         '''
         :cfg_path (string): path of the experiment config file
         :torch_seed (int): Seed used for random generators in PyTorch functions
+        :stopping_patience: Number of epochs that we had no improvement in the loss
+         and then we should stop training.
         '''
         self.params = read_config(cfg_path)
         self.cfg_path = cfg_path
@@ -43,6 +46,7 @@ class Training:
             self.raise_training_complete_exception()
 
         self.setup_cuda()
+        self.stopper = EarlyStoppingCallback(patience=stopping_patience)
         self.writer = SummaryWriter(log_dir=os.path.join(self.params['tb_logs_path']))
 
     def setup_cuda(self, cuda_device_id=0):
@@ -113,6 +117,7 @@ class Training:
         self.model_info['num_epochs'] = num_epochs or self.model_info['num_epochs']
 
         best_valid_F1 = 0.0
+        best_valid_loss = float('inf')
         self.epoch = 0
         self.tb_train_step = 0
         self.tb_val_step = 0
@@ -143,9 +148,12 @@ class Training:
                 best_valid_F1 = valid_F1
                 torch.save(self.model.state_dict(), self.params['network_output_path'] + '/' +
                            self.params['trained_model_name'])
-        # Saving the last epoch
-        # torch.save(self.model.state_dict(), self.params['network_output_path'] +
-        # "/" + self.params['trained_model_name'])
+
+            #TODO: earlystoping goes here!
+            best_valid_loss = self.stopper.step(current_loss=valid_loss, best_loss=best_valid_loss)
+            stopping_flag = self.stopper.should_stop()
+            if stopping_flag:
+                break
 
         # Saves information about training to config file
         self.model_info['num_steps'] = self.epoch
@@ -173,10 +181,11 @@ class Training:
         total_f1_score = 0
         f1_score = 0
 
+        logits_with_sigmoid_cache = torch.from_numpy(np.zeros((len(train_loader) * 4, 2)))
+        logits_no_sigmoid_cache = torch.from_numpy(np.zeros((len(train_loader) * 4, 2)))
+        labels_cache = torch.from_numpy(np.zeros_like(logits_with_sigmoid_cache))
+
         for idx, (image, label) in enumerate(train_loader):
-            # pdb.set_trace()
-            # image = image.float()
-            # label = label.long()
             image = image.to(self.device)
             label = label.to(self.device)
 
@@ -186,61 +195,90 @@ class Training:
             with torch.set_grad_enabled(True):
 
                 output = self.model(image)
-                # output = output[:,:,0,0]
                 label = label.float()
                 output_sigmoided = F.sigmoid(output)
                 output_sigmoided = (output_sigmoided > 0.5).float()
 
+                # saving the logits and labels of this batch
+                for i, batch in enumerate(output_sigmoided):
+                    logits_with_sigmoid_cache[idx * 4 + i] = batch
+                for i, batch in enumerate(output):
+                    logits_no_sigmoid_cache[idx * 4 + i] = batch
+                for i, batch in enumerate(label):
+                    labels_cache[idx * 4 + i] = batch
+
                 # Loss
                 loss = self.loss_function(output, label)
-                batch_loss += loss.item()
-                total_loss += loss.item()
-                batch_count += 1
-
-                '''Metrics calculation (macro)'''
-                #TODO: multi-label metrics
-
-                # [[TN, FP],
-                # [FN, TP]] for each class
-                crack_confusion, inactive_confusion = multilabel_confusion_matrix(label.cpu(), output_sigmoided.cpu())
-
-                TN = crack_confusion[0,0]
-                FP = crack_confusion[0,1]
-                FN = crack_confusion[1,0]
-                TP = crack_confusion[1,1]
-                accuracy1 = (TP + TN) / (TP + TN + FP + FN + epsilon)
-                F1_1 = 2 * TP / (2*TP + FN + FP + epsilon)
-
-                TN = inactive_confusion[0,0]
-                FP = inactive_confusion[0,1]
-                FN = inactive_confusion[1,0]
-                TP = inactive_confusion[1,1]
-                accuracy2 = (TP + TN) / (TP + TN + FP + FN + epsilon)
-                F1_2 = 2 * TP / (2*TP + FN + FP + epsilon)
-
-                batch_accuracy += (accuracy1 + accuracy2) / 2
-                f1_score += (F1_1 + F1_2) / 2
+                # batch_loss += loss.item()
+                # total_loss += loss.item()
+                # batch_count += 1
+                #
+                # '''Metrics calculation (macro)'''
+                # # [[TN, FP],
+                # # [FN, TP]] for each class
+                # crack_confusion, inactive_confusion = multilabel_confusion_matrix(label.cpu(), output_sigmoided.cpu())
+                #
+                # TN = crack_confusion[0,0]
+                # FP = crack_confusion[0,1]
+                # FN = crack_confusion[1,0]
+                # TP = crack_confusion[1,1]
+                # accuracy_1 = (TP + TN) / (TP + TN + FP + FN + epsilon)
+                # F1_1 = 2 * TP / (2*TP + FN + FP + epsilon)
+                #
+                # TN = inactive_confusion[0,0]
+                # FP = inactive_confusion[0,1]
+                # FN = inactive_confusion[1,0]
+                # TP = inactive_confusion[1,1]
+                # accuracy_2 = (TP + TN) / (TP + TN + FP + FN + epsilon)
+                # F1_2 = 2 * TP / (2*TP + FN + FP + epsilon)
+                #
+                # batch_accuracy += (accuracy_1 + accuracy_2) / 2
+                # total_accuracy += (accuracy_1 + accuracy_2) / 2
+                # f1_score += (F1_1 + F1_2) / 2
+                # total_f1_score += (F1_1 + F1_2) / 2
 
                 #Backward and optimize
                 loss.backward()
                 self.optimiser.step()
 
-                # Prints loss statistics and writes to the tensorboard after number of steps specified.
-                if (idx + 1)%self.params['display_stats_freq'] == 0:
-                    print('Epoch {:02} | Batch {:03}-{:03} | Train loss: {:.3f} | Train F1: {:.3f}'.
-                          format(self.epoch + 1, previous_idx, idx, batch_loss / batch_count, f1_score / batch_count))
-                    previous_idx = idx + 1
-                    self.tb_train_step += 1
-                    self.calculate_tb_stats(batch_loss / batch_count, batch_accuracy / batch_count,
-                                            f1_score / batch_count, is_train=True)
-                    batch_loss = 0
-                    batch_count = 0
-                    batch_accuracy = 0
-                    f1_score = 0
+                # # Prints loss statistics and writes to the tensorboard after number of steps specified.
+                # if (idx + 1)%self.params['display_stats_freq'] == 0:
+                #     print('Epoch {:02} | Batch {:03}-{:03} | Train loss: {:.3f} | Train F1: {:.3f}'.
+                #           format(self.epoch + 1, previous_idx, idx, batch_loss / batch_count, f1_score / batch_count))
+                #     previous_idx = idx + 1
+                #     self.tb_train_step += 1
+                #     self.calculate_tb_stats(batch_loss / batch_count, batch_accuracy / batch_count,
+                #                             f1_score / batch_count, is_train=True)
+                #     batch_loss = 0
+                #     batch_count = 0
+                #     batch_accuracy = 0
+                #     f1_score = 0
 
-        epoch_accuracy = total_accuracy / len(train_loader)
-        epoch_loss = total_loss / len(train_loader)
-        epoch_f1_score  = total_f1_score / len(train_loader)
+        # epoch_accuracy = total_accuracy / len(train_loader)
+        # epoch_loss = total_loss / len(train_loader)
+        # epoch_f1_score  = total_f1_score / len(train_loader)
+
+        crack_confusion, inactive_confusion = multilabel_confusion_matrix(labels_cache.cpu(), logits_with_sigmoid_cache.cpu())
+
+        TN = crack_confusion[0, 0]
+        FP = crack_confusion[0, 1]
+        FN = crack_confusion[1, 0]
+        TP = crack_confusion[1, 1]
+        accuracy_1 = (TP + TN) / (TP + TN + FP + FN + epsilon)
+        F1_1 = 2 * TP / (2 * TP + FN + FP + epsilon)
+
+        TN_2 = inactive_confusion[0, 0]
+        FP_2 = inactive_confusion[0, 1]
+        FN_2 = inactive_confusion[1, 0]
+        TP_2 = inactive_confusion[1, 1]
+        accuracy_2 = (TP_2 + TN_2) / (TP_2 + TN_2 + FP_2 + FN_2 + epsilon)
+        F1_2 = 2 * TP_2 / (2 * TP_2 + FN_2 + FP_2 + epsilon)
+
+        epoch_accuracy = (accuracy_1 + accuracy_2) / 2
+        epoch_f1_score = (F1_1 + F1_2) / 2
+        loss = self.loss_function(logits_no_sigmoid_cache.to(self.device), labels_cache.to(self.device))
+        epoch_loss = loss.item()
+
         return epoch_loss, epoch_accuracy, epoch_f1_score
 
 
@@ -261,62 +299,95 @@ class Training:
             total_f1_score = 0
             f1_score = 0
 
+            logits_with_sigmoid_cache = torch.from_numpy(np.zeros((len(valid_loader) * 4, 2)))
+            logits_no_sigmoid_cache = torch.from_numpy(np.zeros((len(valid_loader) * 4, 2)))
+            labels_cache = torch.from_numpy(np.zeros_like(logits_with_sigmoid_cache))
+
             for idx, (image, label) in enumerate(valid_loader):
-                # image = image.float()
-                # label = label.long()
                 image = image.to(self.device)
                 label = label.to(self.device)
                 output = self.model(image)
-                # output = output[:,:,0,0]
                 label = label.float()
                 output_sigmoided = F.sigmoid(output)
                 output_sigmoided = (output_sigmoided > 0.5).float()
 
-                # Loss
-                loss = self.loss_function(output, label)
-                batch_loss += loss.item()
-                total_loss += loss.item()
-                batch_count += 1
+                # saving the logits and labels of this batch
+                for i, batch in enumerate(output_sigmoided):
+                    logits_with_sigmoid_cache[idx * 4 + i] = batch
+                for i, batch in enumerate(output):
+                    logits_no_sigmoid_cache[idx * 4 + i] = batch
+                for i, batch in enumerate(label):
+                    labels_cache[idx * 4 + i] = batch
 
-                '''Metrics calculation'''
-                # [[TN, FP],
-                # [FN, TP]] for each class
-                crack_confusion, inactive_confusion = multilabel_confusion_matrix(label.cpu(), output_sigmoided.cpu())
+                # # Loss
+                # loss = self.loss_function(output, label)
+                # batch_loss += loss.item()
+                # total_loss += loss.item()
+                # batch_count += 1
+                #
+                # '''Metrics calculation'''
+                # # [[TN, FP],
+                # # [FN, TP]] for each class
+                # crack_confusion, inactive_confusion = multilabel_confusion_matrix(label.cpu(), output_sigmoided.cpu())
+                #
+                # TN = crack_confusion[0,0]
+                # FP = crack_confusion[0,1]
+                # FN = crack_confusion[1,0]
+                # TP = crack_confusion[1,1]
+                # accuracy_1 = (TP + TN) / (TP + TN + FP + FN + epsilon)
+                # F1_1 = 2 * TP / (2*TP + FN + FP + epsilon)
+                #
+                # TN = inactive_confusion[0,0]
+                # FP = inactive_confusion[0,1]
+                # FN = inactive_confusion[1,0]
+                # TP = inactive_confusion[1,1]
+                # accuracy_2 = (TP + TN) / (TP + TN + FP + FN + epsilon)
+                # F1_2 = 2 * TP / (2*TP + FN + FP + epsilon)
+                #
+                # batch_accuracy += (accuracy_1 + accuracy_2) / 2
+                # total_accuracy += (accuracy_1 + accuracy_2) / 2
+                # f1_score += (F1_1 + F1_2) / 2
+                # total_f1_score += (F1_1 + F1_2) / 2
+                #
+                # # Prints loss statistics and writes to the tensorboard after number of steps specified.
+                # if (idx + 1) % self.params['display_stats_freq'] == 0:
+                #     print('Epoch {:02} | Batch {:03}-{:03} | Val. loss: {:.3f} | Val. F1: {:.3f}'.
+                #           format(self.epoch + 1, previous_idx, idx, batch_loss / batch_count, f1_score / batch_count))
+                #     previous_idx = idx + 1
+                #     self.tb_val_step += 1
+                #     self.calculate_tb_stats(batch_loss / batch_count, batch_accuracy / batch_count,
+                #                             f1_score / batch_count, is_train=False)
+                #     batch_loss = 0
+                #     batch_count = 0
+                #     batch_accuracy = 0
+                #     f1_score = 0
 
-                TN = crack_confusion[0,0]
-                FP = crack_confusion[0,1]
-                FN = crack_confusion[1,0]
-                TP = crack_confusion[1,1]
-                accuracy1 = (TP + TN) / (TP + TN + FP + FN + epsilon)
-                F1_1 = 2 * TP / (2*TP + FN + FP + epsilon)
+        # epoch_accuracy = total_accuracy / len(valid_loader)
+        # epoch_loss = total_loss / len(valid_loader)
+        # epoch_f1_score  = total_f1_score / len(valid_loader)
 
-                TN = inactive_confusion[0,0]
-                FP = inactive_confusion[0,1]
-                FN = inactive_confusion[1,0]
-                TP = inactive_confusion[1,1]
-                accuracy2 = (TP + TN) / (TP + TN + FP + FN + epsilon)
-                F1_2 = 2 * TP / (2*TP + FN + FP + epsilon)
+        crack_confusion, inactive_confusion = multilabel_confusion_matrix(labels_cache.cpu(), logits_with_sigmoid_cache.cpu())
 
-                batch_accuracy += (accuracy1 + accuracy2) / 2
-                f1_score += (F1_1 + F1_2) / 2
+        TN = crack_confusion[0, 0]
+        FP = crack_confusion[0, 1]
+        FN = crack_confusion[1, 0]
+        TP = crack_confusion[1, 1]
+        accuracy_1 = (TP + TN) / (TP + TN + FP + FN + epsilon)
+        F1_1 = 2 * TP / (2 * TP + FN + FP + epsilon)
 
-                # Prints loss statistics and writes to the tensorboard after number of steps specified.
-                if (idx + 1) % self.params['display_stats_freq'] == 0:
-                    print('Epoch {:02} | Batch {:03}-{:03} | Val. loss: {:.3f} | Val. F1: {:.3f}'.
-                          format(self.epoch + 1, previous_idx, idx, batch_loss / batch_count, f1_score / batch_count))
-                    previous_idx = idx + 1
-                    self.tb_val_step += 1
-                    self.calculate_tb_stats(batch_loss / batch_count, batch_accuracy / batch_count,
-                                            f1_score / batch_count, is_train=False)
-                    batch_loss = 0
-                    batch_count = 0
-                    batch_accuracy = 0
-                    f1_score = 0
+        TN_2 = inactive_confusion[0, 0]
+        FP_2 = inactive_confusion[0, 1]
+        FN_2 = inactive_confusion[1, 0]
+        TP_2 = inactive_confusion[1, 1]
+        accuracy_2 = (TP_2 + TN_2) / (TP_2 + TN_2 + FP_2 + FN_2 + epsilon)
+        F1_2 = 2 * TP_2 / (2 * TP_2 + FN_2 + FP_2 + epsilon)
+
+        epoch_accuracy = (accuracy_1 + accuracy_2) / 2
+        epoch_f1_score = (F1_1 + F1_2) / 2
+        loss = self.loss_function(logits_no_sigmoid_cache.to(self.device), labels_cache.to(self.device))
+        epoch_loss = loss.item()
 
         self.model.train()
-        epoch_accuracy = total_accuracy / len(valid_loader)
-        epoch_loss = total_loss / len(valid_loader)
-        epoch_f1_score  = total_f1_score / len(valid_loader)
         return epoch_loss, epoch_accuracy, epoch_f1_score
 
 
@@ -430,17 +501,17 @@ class Prediction:
                 FP = crack_confusion[0,1]
                 FN = crack_confusion[1,0]
                 TP = crack_confusion[1,1]
-                accuracy1 = (TP + TN) / (TP + TN + FP + FN + epsilon)
+                accuracy_1 = (TP + TN) / (TP + TN + FP + FN + epsilon)
                 F1_1 = 2 * TP / (2*TP + FN + FP + epsilon)
 
                 TN = inactive_confusion[0,0]
                 FP = inactive_confusion[0,1]
                 FN = inactive_confusion[1,0]
                 TP = inactive_confusion[1,1]
-                accuracy2 = (TP + TN) / (TP + TN + FP + FN + epsilon)
+                accuracy_2 = (TP + TN) / (TP + TN + FP + FN + epsilon)
                 F1_2 = 2 * TP / (2*TP + FN + FP + epsilon)
 
-                total_accuracy += (accuracy1 + accuracy2) / 2
+                total_accuracy += (accuracy_1 + accuracy_2) / 2
                 total_f1_score += (F1_1 + F1_2) / 2
 
 
@@ -454,103 +525,6 @@ class Prediction:
         print(f'Testing for the SemEval 2014 and 2015 gold data | Testing Time: {test_mins}m {test_secs}s')
         print(f'\tTesting Acc: {final_accuracy * 100:.2f}% | Testing F1: {final_f1_score:.3f}')
         print('----------------------------------------------------------------------\n')
-
-
-
-# class Training2:
-#
-#     # def __init__(self,
-#     #              model,                # Model to be trained.
-#     #              crit,                 # Loss function
-#     #              optim = None,         # Optimiser
-#     #              train_dl = None,      # Training data set
-#     #              val_test_dl = None,   # Validation (or test) data set
-#     #              cuda = True,          # Whether to use the GPU
-#     #              early_stopping_cb = None): # The stopping criterion.
-#     #     self._model = model
-#     #     self._crit = crit
-#     #     self._optim = optim
-#     #     self._train_dl = train_dl
-#     #     self._val_test_dl = val_test_dl
-#     #     self._cuda = cuda
-#         self._early_stopping_cb = early_stopping_cb
-#
-#     #     if cuda:
-#     #         self._model = model.cuda()
-#     #         self._crit = crit.cuda()
-#     #
-#     # def save_checkpoint(self, epoch):
-#     #     t.save({'state_dict': self._model.state_dict()}, 'checkpoints/checkpoint_{:03d}.ckp'.format(epoch))
-#     #
-#     # def restore_checkpoint(self, epoch_n):
-#     #     ckp = t.load('checkpoints/checkpoint_{:03d}.ckp'.format(epoch_n), 'cuda' if self._cuda else None)
-#     #     self._model.load_state_dict(ckp['state_dict'])
-        
-    # def save_onnx(self, fn):
-    #     m = self._model.cpu()
-    #     m.eval()
-    #     x = t.randn(1, 3, 300, 300, requires_grad=True)
-    #     y = self._model(x)
-    #     t.onnx.export(m,                 # model being run
-    #           x,                         # model input (or a tuple for multiple inputs)
-    #           fn,                        # where to save the model (can be a file or file-like object)
-    #           export_params=True,        # store the trained parameter weights inside the model file
-    #           opset_version=10,          # the ONNX version to export the model to
-    #           do_constant_folding=True,  # whether to execute constant folding for optimization
-    #           input_names = ['input'],   # the model's input names
-    #           output_names = ['output'], # the model's output names
-    #           dynamic_axes={'input' : {0 : 'batch_size'},    # variable lenght axes
-    #                         'output' : {0 : 'batch_size'}})
-            
-    # def train_step(self, x, y):
-    #     # perform following steps:
-    #     # -reset the gradients
-    #     # -propagate through the network
-    #     # -calculate the loss
-    #     # -compute gradient by backward propagation
-    #     # -update weights
-    #     # -return the loss
-    #
-    #
-    #
-    # def val_test_step(self, x, y):
-    #
-    #     # predict
-    #     # propagate through the network and calculate the loss and predictions
-    #     # return the loss and the predictions
-    #
-    # def train_epoch(self):
-    #     # set training mode
-    #     # iterate through the training set
-    #     # transfer the batch to "cuda()" -> the gpu if a gpu is given
-    #     # perform a training step
-    #     # calculate the average loss for the epoch and return it
-    #
-    # def val_test(self):
-    #     # set eval mode
-    #     # disable gradient computation
-    #     # iterate through the validation set
-    #     # transfer the batch to the gpu if given
-    #     # perform a validation step
-    #     # save the predictions and the labels for each batch
-    #     # calculate the average loss and average metrics of your choice. You might want to calculate these metrics in designated functions
-    #     # return the loss and print the calculated metrics
-
-    
-    # def fit(self, epochs=-1):
-    #     assert self._early_stopping_cb is not None or epochs > 0
-    #     # create a list for the train and validation losses, and create a counter for the epoch
-    #     #
-    #
-    #     while True:
-    #
-    #         # stop by epoch number
-    #         # train for a epoch and then calculate the loss and metrics on the validation set
-    #         # append the losses to the respective lists
-    #         # use the save_checkpoint function to save the model for each epoch
-    #         # check whether early stopping should be performed using the early stopping callback and stop if so
-    #         # return the loss lists for both training and validation
-    #
 
 
 

@@ -1,8 +1,11 @@
-from data.data import get_validation_dataset
+from data.data_handler import get_validation_dataset
 import numpy as np
 import torch
 
-train_dl = torch.utils.data.DataLoader(get_validation_dataset(), batch_size=1)
+
+CONFIG_PATH = '/home/soroosh/Documents/Repositories/deep_learning_challenge/configs/config.json'
+
+train_dl = torch.utils.data.DataLoader(get_validation_dataset(CONFIG_PATH, 0.2), batch_size=1)
 
 a = 0.0
 s = np.zeros(3)
@@ -18,3 +21,4 @@ assert x.shape[0] == 3 and x.shape[1] == 300 and x.shape[1] == 300, "your sample
 for i in range(3):
     assert s[i] > -a*0.09 and s[i] < a*0.09, "your normalization seems wrong"
     assert s2[i] > a*0.91 and s2[i] < a*1.09, "your normalization seems wrong"
+
