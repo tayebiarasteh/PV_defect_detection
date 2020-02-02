@@ -8,6 +8,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import pdb
 
+
 class ResNet(nn.Module):
     def __init__(self, n_in_channels=3, n_out_classes=2):
         super().__init__()
@@ -38,20 +39,18 @@ class ResBlock(nn.Module):
             nn.Conv2d(out_ch, out_ch, kernel_size=3, padding=1),
             nn.BatchNorm2d(out_ch),
             nn.ReLU())
-        self.identity = nn.Identity()
 
     def forward(self, input_tensor):
-        identity1 = self.identity(input_tensor)
         res_out = self.res(input_tensor)
 
-        if res_out.shape != identity1.shape:
-            offset1 = res_out.shape[1] - identity1.shape[1]
-            identity1 = F.pad(identity1, (0,0,0,0,0,offset1))
-            offset2 = identity1.shape[2] - res_out.shape[2]
-            offset3 = identity1.shape[3] - res_out.shape[3]
-            res_out = F.pad(res_out, (0,offset3,0,offset2))
+        if res_out.shape != input_tensor.shape:
+            offset1 = res_out.shape[1] - input_tensor.shape[1]
+            input_tensor = F.pad(input_tensor, [0,0, 0,0, 0,offset1])
+            offset2 = input_tensor.shape[2] - res_out.shape[2]
+            offset3 = input_tensor.shape[3] - res_out.shape[3]
+            res_out = F.pad(res_out, [0,offset3, 0,offset2])
 
-        output_tensor = res_out + identity1
+        output_tensor = res_out + input_tensor
         return output_tensor
 
 
@@ -79,9 +78,10 @@ class ResnetDecoder(nn.Module):
     def __init__(self, in_ch, out_ch):
         super().__init__()
         self.avg = nn.AdaptiveAvgPool2d((1, 1))
-        self.decoder = nn.Conv2d(in_ch, out_ch, kernel_size=1)
+        self.fully = nn.Linear(in_ch, out_ch)
 
     def forward(self, input_tensor):
         averaged = self.avg(input_tensor)
-        output_tensor = self.decoder(averaged)
+        flattened = torch.flatten(averaged, 1)
+        output_tensor = self.fully(flattened)
         return output_tensor

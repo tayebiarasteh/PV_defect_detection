@@ -13,6 +13,7 @@ import torch.optim as optim
 from configs.serde import *
 from Train_Test_Valid import *
 from models.resnet import *
+# from models.resnet_official import *
 from stopping import EarlyStoppingCallback
 from data.data_handler import *
 
@@ -35,7 +36,7 @@ def main_train():
     LOSS_FUNCTION = BCEWithLogitsLoss
     OPTIMIZER = optim.Adam
     VALID_SPLIT_RATIO = 0.2
-    parameters = dict(lr = [1e-3], batch_size = [1])
+    parameters = dict(lr = [5e-3], batch_size = [4])
     param_values = [v for v in parameters.values()]
 
     '''Hyper-parameter testing'''
@@ -57,6 +58,7 @@ def main_train():
         '''Define model parameters'''
         optimiser_params = {'lr': lr}
         MODEL = ResNet()
+        # MODEL = resnet18()
         trainer.setup_model(model=MODEL, optimiser=OPTIMIZER,
                             optimiser_params=optimiser_params, loss_function=LOSS_FUNCTION, pos_weight=pos_weight)
         '''Execute Training'''
@@ -75,7 +77,7 @@ def main_test():
 
 def experiment_deleter():
     '''Use below lines if you want to delete an experiment and reuse the same experiment name'''
-    parameters = dict(lr = [1e-3], batch_size = [1])
+    parameters = dict(lr = [5e-3], batch_size = [1])
     param_values = [v for v in parameters.values()]
     for lr, BATCH_SIZE in product(*param_values):
         delete_experiment("Adam_lr" + str(lr))

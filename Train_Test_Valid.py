@@ -22,7 +22,7 @@ from configs.serde import *
 # from evaluation import create_evaluation
 import pdb
 os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
-
+epsilon = 1e-15
 
 class Training:
     '''
@@ -174,6 +174,7 @@ class Training:
         f1_score = 0
 
         for idx, (image, label) in enumerate(train_loader):
+            # pdb.set_trace()
             # image = image.float()
             # label = label.long()
             image = image.to(self.device)
@@ -183,8 +184,9 @@ class Training:
             self.optimiser.zero_grad()
 
             with torch.set_grad_enabled(True):
+
                 output = self.model(image)
-                output = output[:,:,0,0]
+                # output = output[:,:,0,0]
                 label = label.float()
                 output_sigmoided = F.sigmoid(output)
                 output_sigmoided = (output_sigmoided > 0.5).float()
@@ -195,19 +197,29 @@ class Training:
                 total_loss += loss.item()
                 batch_count += 1
 
-                '''Metrics calculation'''
+                '''Metrics calculation (macro)'''
                 #TODO: multi-label metrics
 
-                # [[TN, FP],[FN, TP]] for each class
+                # [[TN, FP],
+                # [FN, TP]] for each class
                 crack_confusion, inactive_confusion = multilabel_confusion_matrix(label.cpu(), output_sigmoided.cpu())
 
-                # accuracy = (TP + TN) / (TP + TN + FP + FN + epsilon)
-                # specificity = TN / (TN + FN + epsilon)
-                # sensitivity = TP / (TP + FN + epsilon)
-                # precision = TP / (TP + FP + epsilon)
-                # F1 = (2 * precision * sensitivity / (precision + sensitivity + epsilon))
+                TN = crack_confusion[0,0]
+                FP = crack_confusion[0,1]
+                FN = crack_confusion[1,0]
+                TP = crack_confusion[1,1]
+                accuracy1 = (TP + TN) / (TP + TN + FP + FN + epsilon)
+                F1_1 = 2 * TP / (2*TP + FN + FP + epsilon)
 
-                pdb.set_trace()
+                TN = inactive_confusion[0,0]
+                FP = inactive_confusion[0,1]
+                FN = inactive_confusion[1,0]
+                TP = inactive_confusion[1,1]
+                accuracy2 = (TP + TN) / (TP + TN + FP + FN + epsilon)
+                F1_2 = 2 * TP / (2*TP + FN + FP + epsilon)
+
+                batch_accuracy += (accuracy1 + accuracy2) / 2
+                f1_score += (F1_1 + F1_2) / 2
 
                 #Backward and optimize
                 loss.backward()
@@ -255,7 +267,7 @@ class Training:
                 image = image.to(self.device)
                 label = label.to(self.device)
                 output = self.model(image)
-                output = output[:,:,0,0]
+                # output = output[:,:,0,0]
                 label = label.float()
                 output_sigmoided = F.sigmoid(output)
                 output_sigmoided = (output_sigmoided > 0.5).float()
@@ -267,16 +279,26 @@ class Training:
                 batch_count += 1
 
                 '''Metrics calculation'''
-                #TODO: multi-label metrics
-
-                # [[TN, FP],[FN, TP]] for each class
+                # [[TN, FP],
+                # [FN, TP]] for each class
                 crack_confusion, inactive_confusion = multilabel_confusion_matrix(label.cpu(), output_sigmoided.cpu())
 
-                # accuracy = (TP + TN) / (TP + TN + FP + FN + epsilon)
-                # specificity = TN / (TN + FN + epsilon)
-                # sensitivity = TP / (TP + FN + epsilon)
-                # precision = TP / (TP + FP + epsilon)
-                # F1 = (2 * precision * sensitivity / (precision + sensitivity + epsilon))
+                TN = crack_confusion[0,0]
+                FP = crack_confusion[0,1]
+                FN = crack_confusion[1,0]
+                TP = crack_confusion[1,1]
+                accuracy1 = (TP + TN) / (TP + TN + FP + FN + epsilon)
+                F1_1 = 2 * TP / (2*TP + FN + FP + epsilon)
+
+                TN = inactive_confusion[0,0]
+                FP = inactive_confusion[0,1]
+                FN = inactive_confusion[1,0]
+                TP = inactive_confusion[1,1]
+                accuracy2 = (TP + TN) / (TP + TN + FP + FN + epsilon)
+                F1_2 = 2 * TP / (2*TP + FN + FP + epsilon)
+
+                batch_accuracy += (accuracy1 + accuracy2) / 2
+                f1_score += (F1_1 + F1_2) / 2
 
                 # Prints loss statistics and writes to the tensorboard after number of steps specified.
                 if (idx + 1) % self.params['display_stats_freq'] == 0:
@@ -388,27 +410,39 @@ class Prediction:
             total_accuracy = 0
             total_f1_score = 0
 
-            for idx, batch in enumerate(test_loader):
-                message, message_lengths = batch.text
-                label = batch.label
-                message = message.long()
-                label = label.long()
-                message = message.to(self.device)
+            for idx, (image, label) in enumerate(test_loader):
+                # image = image.float()
+                # label = label.long()
+                image = image.to(self.device)
                 label = label.to(self.device)
-                output = self.model_p(message, message_lengths).squeeze(1)
+                output = self.model_p(image)
+                # output = output[:,:,0,0]
+                label = label.float()
+                output_sigmoided = F.sigmoid(output)
+                output_sigmoided = (output_sigmoided > 0.5).float()
 
                 '''Metrics calculation'''
-                max_preds = output.argmax(dim=1, keepdim=True)  # get the index of the max probability
+                # [[TN, FP],
+                # [FN, TP]] for each class
+                crack_confusion, inactive_confusion = multilabel_confusion_matrix(label.cpu(), output_sigmoided.cpu())
 
-                # Accuracy
-                correct = max_preds.squeeze(1).eq(label)
-                total_accuracy += (correct.sum() / torch.FloatTensor([label.shape[0]])).item()
+                TN = crack_confusion[0,0]
+                FP = crack_confusion[0,1]
+                FN = crack_confusion[1,0]
+                TP = crack_confusion[1,1]
+                accuracy1 = (TP + TN) / (TP + TN + FP + FN + epsilon)
+                F1_1 = 2 * TP / (2*TP + FN + FP + epsilon)
 
-                max_preds = max_preds.cpu()
-                label = label.cpu()
+                TN = inactive_confusion[0,0]
+                FP = inactive_confusion[0,1]
+                FN = inactive_confusion[1,0]
+                TP = inactive_confusion[1,1]
+                accuracy2 = (TP + TN) / (TP + TN + FP + FN + epsilon)
+                F1_2 = 2 * TP / (2*TP + FN + FP + epsilon)
 
-                # F1 Score
-                total_f1_score += metrics.f1_score(label, max_preds, average='micro')
+                total_accuracy += (accuracy1 + accuracy2) / 2
+                total_f1_score += (F1_1 + F1_2) / 2
+
 
         final_accuracy = total_accuracy / len(test_loader)
         final_f1_score  = total_f1_score / len(test_loader)
