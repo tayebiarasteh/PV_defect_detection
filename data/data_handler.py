@@ -48,9 +48,11 @@ class ChallengeDataset(Dataset):
             reader = csv.DictReader(csv_file, delimiter=';')
             for row in reader:
                 self.input_list.append(row)
-                self.sum_crack += int(row['crack'])
-                self.sum_inactive += int(row['inactive'])
         self.train_list, self.valid_list = train_test_split(self.input_list, test_size=valid_split_ratio, random_state=seed)
+
+        for row in self.train_list:
+            self.sum_crack += int(row['crack'])
+            self.sum_inactive += int(row['inactive'])
 
 
     def __len__(self):
@@ -83,9 +85,12 @@ class ChallengeDataset(Dataset):
 
 
     def pos_weight(self):
-        '''Calculates a weight for positive examples for each class and returns it as a tensor'''
-        w_crack = torch.tensor((len(self.input_list) - self.sum_crack) / (self.sum_crack + epsilon))
-        w_inactive = torch.tensor((len(self.input_list) - self.sum_inactive) / (self.sum_inactive + epsilon))
+        '''
+        Calculates a weight for positive examples for each class and returns it as a tensor
+        Only using the training set.
+        '''
+        w_crack = torch.tensor((len(self.train_list) - self.sum_crack) / (self.sum_crack + epsilon))
+        w_inactive = torch.tensor((len(self.train_list) - self.sum_inactive) / (self.sum_inactive + epsilon))
         output_tensor = torch.zeros((2))
         output_tensor[0] = w_crack
         output_tensor[1] = w_inactive
@@ -101,7 +106,7 @@ def get_train_dataset(cfg_path, valid_split_ratio):
 
 # without augmentation
 def get_validation_dataset(cfg_path, valid_split_ratio):
-    trans = transforms.Compose([transforms.ToPILImage(), transforms.ToTensor()])
+    trans = transforms.Compose([transforms.ToPILImage(), transforms.ToTensor(), transforms.Normalize(train_mean, train_std)])
     return ChallengeDataset(cfg_path=cfg_path, valid_split_ratio=valid_split_ratio, transform=trans, mode=Mode.VALID)
 
 
