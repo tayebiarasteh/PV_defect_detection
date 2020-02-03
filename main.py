@@ -31,17 +31,17 @@ def main_train():
     '''Main function for training + validation'''
 
     '''Hyper-parameters'''
-    NUM_EPOCH = 15
+    NUM_EPOCH = 70
     LOSS_FUNCTION = BCEWithLogitsLoss
     OPTIMIZER = optim.Adam
     VALID_SPLIT_RATIO = 0.2
-    parameters = dict(lr = [1e-2], batch_size = [4])
+    parameters = dict(lr = [9e-4], batch_size = [32])
     param_values = [v for v in parameters.values()]
 
     '''Hyper-parameter testing'''
     for lr, BATCH_SIZE in product(*param_values):
         # put the new experiment name here.
-        params = create_experiment("new2Adam_lr" + str(lr))
+        params = create_experiment("Adam_lr" + str(lr))
         cfg_path = params["cfg_path"]
 
         '''Prepare data'''
@@ -60,7 +60,7 @@ def main_train():
         trainer.setup_model(model=MODEL, optimiser=OPTIMIZER,
                             optimiser_params=optimiser_params, loss_function=LOSS_FUNCTION, pos_weight=pos_weight)
         '''Execute Training'''
-        trainer.execute_training(train_loader, valid_loader=valid_loader, num_epochs=NUM_EPOCH)
+        trainer.execute_training(train_loader, valid_loader=valid_loader, num_epochs=NUM_EPOCH, batch_size=BATCH_SIZE)
 
 
 
@@ -76,7 +76,7 @@ def experiment_deleter():
     parameters = dict(lr = [1e-2], batch_size = [1])
     param_values = [v for v in parameters.values()]
     for lr, BATCH_SIZE in product(*param_values):
-        delete_experiment("new2Adam_lr" + str(lr))
+        delete_experiment("new3Adam_lr" + str(lr))
 
 
 
