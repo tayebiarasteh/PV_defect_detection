@@ -6,7 +6,6 @@ ResNet18
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import pdb
 
 
 class ResNet(nn.Module):
@@ -39,17 +38,13 @@ class ResBlock(nn.Module):
             nn.Conv2d(out_ch, out_ch, kernel_size=3, padding=1),
             nn.BatchNorm2d(out_ch),
             nn.ReLU())
+        self.one_by_one = nn.Conv2d(in_ch, out_ch, kernel_size=1, stride=stride)
+        self.batchnorm = nn.BatchNorm2d(out_ch)
 
     def forward(self, input_tensor):
         res_out = self.res(input_tensor)
-
-        if res_out.shape != input_tensor.shape:
-            offset1 = res_out.shape[1] - input_tensor.shape[1]
-            input_tensor = F.pad(input_tensor, [0,0, 0,0, 0,offset1])
-            offset2 = input_tensor.shape[2] - res_out.shape[2]
-            offset3 = input_tensor.shape[3] - res_out.shape[3]
-            res_out = F.pad(res_out, [0,offset3, 0,offset2])
-
+        input_tensor = self.one_by_one(input_tensor)
+        input_tensor = self.batchnorm(input_tensor)
         output_tensor = res_out + input_tensor
         return output_tensor
 
