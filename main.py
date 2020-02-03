@@ -81,6 +81,6 @@ def experiment_deleter():
 
 
 if __name__ == '__main__':
-    experiment_deleter()
+    # experiment_deleter()
     main_train()
     # main_test()

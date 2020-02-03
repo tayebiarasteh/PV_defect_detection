@@ -15,6 +15,7 @@ class EarlyStoppingCallback:
         else:
             best_loss = current_loss
             self.counter = 0
+
         return best_loss
 
 

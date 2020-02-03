@@ -8,6 +8,7 @@ import datetime
 from tqdm.autonotebook import tqdm
 import os
 import time
+from tqdm.autonotebook import tqdm
 
 # Deep Learning Modules
 from tensorboardX import SummaryWriter
@@ -102,6 +103,11 @@ class Training:
         return elapsed_mins, elapsed_secs
 
 
+    def save_checkpoint(self, epoch):
+        torch.save({'state_dict': self.model.state_dict()}, self.params['network_output_path'] + '/' +
+                           self.params['trained_model_name'] + 'checkpoint_{:03d}.ckp'.format(epoch))
+
+
     def execute_training(self, train_loader, valid_loader=None, num_epochs=None):
         '''
         Executes training by running training and validation at each epoch
@@ -140,7 +146,7 @@ class Training:
             print(f'Epoch: {self.epoch + 1:02} | Epoch Time: {epoch_mins}m {epoch_secs}s')
             print(f'\tTrain Loss: {train_loss:.3f} | Train Acc: {train_acc * 100:.2f}% | Train F1: {train_F1:.3f}')
             if valid_loader:
-                print(f'\t Val. Loss: {valid_loss:.3f} |  Val. Acc: {valid_acc * 100:.2f}% |  Val. F1: {valid_F1:.3f}')
+                print(f'\t Val. Loss: {valid_loss} |  Val. Acc: {valid_acc * 100:.2f}% |  Val. F1: {valid_F1:.3f}')
             print('---------------------------------------------------------------\n')
 
             '''Saving the model'''
@@ -150,11 +156,13 @@ class Training:
                 torch.save(self.model.state_dict(), self.params['network_output_path'] + '/' +
                            self.params['trained_model_name'])
 
+            self.save_checkpoint(self.epoch)
+
             #TODO: earlystoping goes here!
-            best_valid_loss = self.stopper.step(current_loss=valid_loss, best_loss=best_valid_loss)
-            stopping_flag = self.stopper.should_stop()
-            if stopping_flag:
-                break
+            # best_valid_loss = self.stopper.step(current_loss=valid_loss, best_loss=best_valid_loss)
+            # stopping_flag = self.stopper.should_stop()
+            # if stopping_flag == True:
+            #     break
 
         # Saves information about training to config file
         self.model_info['num_steps'] = self.epoch
@@ -267,18 +275,18 @@ class Training:
         FP = crack_confusion[0, 1]
         FN = crack_confusion[1, 0]
         TP = crack_confusion[1, 1]
-        accuracy_1 = (TP + TN) / (TP + TN + FP + FN + epsilon)
-        F1_1 = 2 * TP / (2 * TP + FN + FP + epsilon)
+        accuracy_Crack = (TP + TN) / (TP + TN + FP + FN + epsilon)
+        F1_Crack = 2 * TP / (2 * TP + FN + FP + epsilon)
 
-        TN_2 = inactive_confusion[0, 0]
-        FP_2 = inactive_confusion[0, 1]
-        FN_2 = inactive_confusion[1, 0]
-        TP_2 = inactive_confusion[1, 1]
-        accuracy_2 = (TP_2 + TN_2) / (TP_2 + TN_2 + FP_2 + FN_2 + epsilon)
-        F1_2 = 2 * TP_2 / (2 * TP_2 + FN_2 + FP_2 + epsilon)
+        TN_inactive = inactive_confusion[0, 0]
+        FP_inactive = inactive_confusion[0, 1]
+        FN_inactive = inactive_confusion[1, 0]
+        TP_inactive = inactive_confusion[1, 1]
+        accuracy_inactive = (TP_inactive + TN_inactive) / (TP_inactive + TN_inactive + FP_inactive + FN_inactive + epsilon)
+        F1_inactive = 2 * TP_inactive / (2 * TP_inactive + FN_inactive + FP_inactive + epsilon)
 
-        epoch_accuracy = (accuracy_1 + accuracy_2) / 2
-        epoch_f1_score = (F1_1 + F1_2) / 2
+        epoch_accuracy = (accuracy_Crack + accuracy_inactive) / 2
+        epoch_f1_score = (F1_Crack + F1_inactive) / 2
         # loss = self.loss_function(logits_no_sigmoid_cache.to(self.device), labels_cache.to(self.device))
         # epoch_loss = loss.item()
 
@@ -375,18 +383,18 @@ class Training:
         FP = crack_confusion[0, 1]
         FN = crack_confusion[1, 0]
         TP = crack_confusion[1, 1]
-        accuracy_1 = (TP + TN) / (TP + TN + FP + FN + epsilon)
-        F1_1 = 2 * TP / (2 * TP + FN + FP + epsilon)
+        accuracy_Crack = (TP + TN) / (TP + TN + FP + FN + epsilon)
+        F1_Crack = 2 * TP / (2 * TP + FN + FP + epsilon)
 
-        TN_2 = inactive_confusion[0, 0]
-        FP_2 = inactive_confusion[0, 1]
-        FN_2 = inactive_confusion[1, 0]
-        TP_2 = inactive_confusion[1, 1]
-        accuracy_2 = (TP_2 + TN_2) / (TP_2 + TN_2 + FP_2 + FN_2 + epsilon)
-        F1_2 = 2 * TP_2 / (2 * TP_2 + FN_2 + FP_2 + epsilon)
+        TN_inactive = inactive_confusion[0, 0]
+        FP_inactive = inactive_confusion[0, 1]
+        FN_inactive = inactive_confusion[1, 0]
+        TP_inactive = inactive_confusion[1, 1]
+        accuracy_inactive = (TP_inactive + TN_inactive) / (TP_inactive + TN_inactive + FP_inactive + FN_inactive + epsilon)
+        F1_inactive = 2 * TP_inactive / (2 * TP_inactive + FN_inactive + FP_inactive + epsilon)
 
-        epoch_accuracy = (accuracy_1 + accuracy_2) / 2
-        epoch_f1_score = (F1_1 + F1_2) / 2
+        epoch_accuracy = (accuracy_Crack + accuracy_inactive) / 2
+        epoch_f1_score = (F1_Crack + F1_inactive) / 2
         # loss = self.loss_function(logits_no_sigmoid_cache.to(self.device), labels_cache.to(self.device))
         # epoch_loss = loss.item()
 
@@ -459,17 +467,35 @@ class Prediction:
         return elapsed_mins, elapsed_secs
 
 
-    def setup_model(self, model, vocab_size, embeddings, pad_idx, unk_idx, model_file_name=None):
-        '''
-        Setup the model by defining the model, load the model from the pth file saved during training.
-        '''
+    def setup_model(self, model, epoch, model_file_name=None):
         if model_file_name == None:
             model_file_name = self.params['trained_model_name']
-        self.model_p = model(vocab_size=vocab_size, embeddings=embeddings,
-                             pad_idx=pad_idx, unk_idx=unk_idx).to(self.device)
+        self.model_p = model().to(self.device)
+
+        ckp = torch.load(self.params['network_output_path'] + '/' + model_file_name +
+                         'checkpoint_{:03d}.ckp'.format(epoch), 'cuda' if self.device else None)
+        self.model_p.load_state_dict(ckp['state_dict'])
 
         # Loads model from model_file_name and default network_output_path
-        self.model_p.load_state_dict(torch.load(self.params['network_output_path'] + "/" + model_file_name))
+        # self.model_p.load_state_dict(torch.load(self.params['network_output_path'] + "/" + model_file_name))
+
+
+    def save_onnx(self, fn):
+        m = self.model_p.cpu()
+        m.eval()
+        x = torch.randn(1, 3, 300, 300, requires_grad=True)
+        y = self.model_p(x)
+        torch.onnx.export(m,  # model being run
+                      x,  # model input (or a tuple for multiple inputs)
+                      fn,  # where to save the model (can be a file or file-like object)
+                      export_params=True,  # store the trained parameter weights inside the model file
+                      opset_version=10,  # the ONNX version to export the model to
+                      do_constant_folding=True,  # whether to execute constant folding for optimization
+                      input_names=['input'],  # the model's input names
+                      output_names=['output'],  # the model's output names
+                      dynamic_axes={'input': {0: 'batch_size'},  # variable lenght axes
+                                    'output': {0: 'batch_size'}})
+
 
 
     def predict(self, test_loader):
