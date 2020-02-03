@@ -1,12 +1,6 @@
-import torch
-from configs.serde import *
-from Train_Test_Valid import *
-import sys
-import torchvision as tv
-
 # Deep Learning Modules
-from torch.nn import *
 import torch
+from torch.nn import *
 import torch.optim as optim
 
 # User Defined Modules

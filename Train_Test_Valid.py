@@ -8,20 +8,17 @@ import datetime
 from tqdm.autonotebook import tqdm
 import os
 import time
-from tqdm.autonotebook import tqdm
 
 # Deep Learning Modules
 from tensorboardX import SummaryWriter
 import torch
 import torch.nn as nn
-from sklearn import metrics
 from sklearn.metrics import multilabel_confusion_matrix
 import torch.nn.functional as F
 
 # User Defined Modules
 from configs.serde import *
 from utils.stopping import EarlyStoppingCallback
-# from evaluation import create_evaluation
 import pdb
 os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
 epsilon = 1e-15
@@ -52,7 +49,6 @@ class Training:
         self.writer = SummaryWriter(log_dir=os.path.join(self.params['tb_logs_path']))
 
     def setup_cuda(self, cuda_device_id=0):
-        '''Setup the CUDA device'''
         if torch.cuda.is_available():
             torch.backends.cudnn.fastest = True
             torch.cuda.set_device(cuda_device_id)
@@ -170,18 +166,13 @@ class Training:
         '''
         Train using one single iteration of all messages (epoch) in dataset
         '''
-        print("Epoch [{}/{}]".format(self.epoch +1, self.model_info['num_epochs']))
+        print("Epoch [{}/{}] intermediate metrics".format(self.epoch +1, self.model_info['num_epochs']))
         self.model.train()
         previous_idx = 0
 
-        # initializing the metrics
-        total_loss = 0
+        # initializing the loss list
         batch_loss = 0
-        total_accuracy = 0
         batch_count = 0
-        batch_accuracy = 0
-        total_f1_score = 0
-        f1_score = 0
 
         # initializing the caches
         logits_with_sigmoid_cache = torch.from_numpy(np.zeros((len(train_loader) * batch_size, 2)))
@@ -221,16 +212,13 @@ class Training:
 
                 # Prints loss statistics and writes to the tensorboard after number of steps specified.
                 if (idx + 1)%self.params['display_stats_freq'] == 0:
-                    print('Epoch {:02} | Batch {:03}-{:03} | Train loss: {:.3f} | Train F1: {:.3f}'.
-                          format(self.epoch + 1, previous_idx, idx, batch_loss / batch_count, f1_score / batch_count))
+                    print('Epoch {:02} | Batch {:03}-{:03} | Train loss: {:.3f}'.
+                          format(self.epoch + 1, previous_idx, idx, batch_loss / batch_count))
                     previous_idx = idx + 1
                     self.tb_train_step += 1
-                    self.calculate_tb_stats(batch_loss / batch_count, batch_accuracy / batch_count,
-                                            f1_score / batch_count, is_train=True)
+                    self.calculate_tb_stats(batch_loss / batch_count, is_train=True)
                     batch_loss = 0
                     batch_count = 0
-                    batch_accuracy = 0
-                    f1_score = 0
 
         '''Metrics calculation (macro) over the whole set'''
         crack_confusion, inactive_confusion = multilabel_confusion_matrix(labels_cache.cpu(), logits_with_sigmoid_cache.cpu())
@@ -248,7 +236,7 @@ class Training:
         TP_inactive = inactive_confusion[1, 1]
         accuracy_inactive = (TP_inactive + TN_inactive) / (TP_inactive + TN_inactive + FP_inactive + FN_inactive + epsilon)
         F1_inactive = 2 * TP_inactive / (2 * TP_inactive + FN_inactive + FP_inactive + epsilon)
-
+        # Macro averaging
         epoch_accuracy = (accuracy_Crack + accuracy_inactive) / 2
         epoch_f1_score = (F1_Crack + F1_inactive) / 2
         loss = self.loss_function(logits_no_sigmoid_cache.to(self.device), labels_cache.to(self.device))
@@ -260,19 +248,14 @@ class Training:
 
     def valid_epoch(self, valid_loader, batch_size):
         '''Test (validation) model after an epoch and calculate loss on test dataset'''
-        print("Epoch [{}/{}]".format(self.epoch + 1, self.model_info['num_epochs']))
+        print("Epoch [{}/{}] intermediate metrics".format(self.epoch + 1, self.model_info['num_epochs']))
         self.model.eval()
         previous_idx = 0
 
         with torch.no_grad():
-            # initializing the metrics
-            total_loss = 0
+            # initializing the loss list
             batch_loss = 0
-            total_accuracy = 0
             batch_count = 0
-            batch_accuracy = 0
-            total_f1_score = 0
-            f1_score = 0
 
             # initializing the caches
             logits_with_sigmoid_cache = torch.from_numpy(np.zeros((len(valid_loader) * batch_size, 2)))
@@ -301,17 +284,14 @@ class Training:
                 batch_count += 1
 
                 # Prints loss statistics and writes to the tensorboard after number of steps specified.
-                if (idx + 1) % self.params['display_stats_freq'] == 0:
-                    print('Epoch {:02} | Batch {:03}-{:03} | Val. loss: {:.3f} | Val. F1: {:.3f}'.
-                          format(self.epoch + 1, previous_idx, idx, batch_loss / batch_count, f1_score / batch_count))
+                if (idx + 1)%self.params['display_stats_freq'] == 0:
+                    print('Epoch {:02} | Batch {:03}-{:03} | Val. loss: {:.3f}'.
+                          format(self.epoch + 1, previous_idx, idx, batch_loss / batch_count))
                     previous_idx = idx + 1
-                    self.tb_val_step += 1
-                    self.calculate_tb_stats(batch_loss / batch_count, batch_accuracy / batch_count,
-                                            f1_score / batch_count, is_train=False)
+                    self.tb_train_step += 1
+                    self.calculate_tb_stats(batch_loss / batch_count, is_train=True)
                     batch_loss = 0
                     batch_count = 0
-                    batch_accuracy = 0
-                    f1_score = 0
 
         '''Metrics calculation (macro) over the whole set'''
         crack_confusion, inactive_confusion = multilabel_confusion_matrix(labels_cache.cpu(), logits_with_sigmoid_cache.cpu())
@@ -329,7 +309,7 @@ class Training:
         TP_inactive = inactive_confusion[1, 1]
         accuracy_inactive = (TP_inactive + TN_inactive) / (TP_inactive + TN_inactive + FP_inactive + FN_inactive + epsilon)
         F1_inactive = 2 * TP_inactive / (2 * TP_inactive + FN_inactive + FP_inactive + epsilon)
-
+        # Macro averaging
         epoch_accuracy = (accuracy_Crack + accuracy_inactive) / 2
         epoch_f1_score = (F1_Crack + F1_inactive) / 2
         loss = self.loss_function(logits_no_sigmoid_cache.to(self.device), labels_cache.to(self.device))
@@ -339,7 +319,7 @@ class Training:
         return epoch_loss, epoch_accuracy, epoch_f1_score
 
 
-    def calculate_tb_stats(self, batch_loss, batch_accuracy, batch_f1_score, is_train=True):
+    def calculate_tb_stats(self, batch_loss, is_train=True):
         '''Adds the statistics of metrics to the tensorboard'''
         if is_train:
             mode = 'Training'
@@ -348,10 +328,8 @@ class Training:
             mode = 'Validation'
             step = self.tb_val_step
 
-        # Adds loss value & number & accuracy of correct predictions to TensorBoard
+        # Adds loss value to TensorBoard
         self.writer.add_scalar(mode + '_Loss', batch_loss, step)
-        self.writer.add_scalar(mode + '_Accuracy', batch_accuracy, step)
-        self.writer.add_scalar(mode + '_F1_Score', batch_f1_score, step)
 
         # Adds all the network's trainable parameters to TensorBoard
         if is_train:
