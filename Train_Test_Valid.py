@@ -103,6 +103,8 @@ class Training:
         '''
         Executes training by running training and validation at each epoch
         '''
+        total_start_time = time.time()
+
         # reads param file again to include changes if any
         self.params = read_config(self.cfg_path)
 
@@ -119,14 +121,15 @@ class Training:
         self.epoch = 0
         self.tb_train_step = 0
         self.tb_val_step = 0
+
         print('Starting time:' + str(datetime.datetime.now()) +'\n')
         for epoch in range(num_epochs):
             self.epoch = epoch
             start_time = time.time()
-            print('Training:')
+            print('Training (intermediate metrics):')
             train_loss, train_acc, train_F1 = self.train_epoch(train_loader, batch_size)
             if valid_loader:
-                print('\nValidation:')
+                print('\nValidation (intermediate metrics):')
                 valid_loss, valid_acc, valid_F1 = self.valid_epoch(valid_loader, batch_size)
 
             end_time = time.time()
@@ -140,12 +143,19 @@ class Training:
                 print(f'\t Val. Loss: {valid_loss:.3f} |  Val. Acc: {valid_acc * 100:.2f}% |  Val. F1: {valid_F1:.3f}')
             print('---------------------------------------------------------------\n')
 
+            # Writes to the tensorboard after number of steps specified.
+            self.calculate_tb_stats(train_loss, valid_loss, train_F1, valid_F1)
+
             '''Saving the model'''
-            # Saving a specific epoch
-            if valid_F1 > best_valid_F1:
-                best_valid_F1 = valid_F1
+            if valid_loss > best_valid_loss:
+                best_valid_loss = valid_loss
                 torch.save(self.model.state_dict(), self.params['network_output_path'] + '/' +
                            self.params['trained_model_name'])
+
+            # Saving a specific epoch
+            if (epoch + 1) % self.params['network_save_freq'] == 0:
+                torch.save(self.model.state_dict(), self.params['network_output_path'] + '/' +
+                           self.params['trained_model_name'] + '_epoch{}'.format(epoch + 1))
 
             #TODO: earlystoping goes here!
             # best_valid_loss = self.stopper.step(current_loss=valid_loss, best_loss=best_valid_loss)
@@ -159,14 +169,16 @@ class Training:
         self.params['Network'] = self.model_info
 
         write_config(self.params, self.cfg_path, sort_keys=True)
-
+        total_end_time = time.time()
+        epoch_mins, epoch_secs = self.epoch_time(total_start_time, total_end_time)
+        print(f'\nTotal Time: {epoch_mins}m {epoch_secs}s')
 
 
     def train_epoch(self, train_loader, batch_size):
         '''
         Train using one single iteration of all messages (epoch) in dataset
         '''
-        print("Epoch [{}/{}] intermediate metrics".format(self.epoch +1, self.model_info['num_epochs']))
+        print("Epoch [{}/{}]".format(self.epoch +1, self.model_info['num_epochs']))
         self.model.train()
         previous_idx = 0
 
@@ -210,13 +222,11 @@ class Training:
                 loss.backward()
                 self.optimiser.step()
 
-                # Prints loss statistics and writes to the tensorboard after number of steps specified.
+                # Prints loss statistics after number of steps specified.
                 if (idx + 1)%self.params['display_stats_freq'] == 0:
                     print('Epoch {:02} | Batch {:03}-{:03} | Train loss: {:.3f}'.
                           format(self.epoch + 1, previous_idx, idx, batch_loss / batch_count))
                     previous_idx = idx + 1
-                    self.tb_train_step += 1
-                    self.calculate_tb_stats(batch_loss / batch_count, is_train=True)
                     batch_loss = 0
                     batch_count = 0
 
@@ -248,7 +258,7 @@ class Training:
 
     def valid_epoch(self, valid_loader, batch_size):
         '''Test (validation) model after an epoch and calculate loss on test dataset'''
-        print("Epoch [{}/{}] intermediate metrics".format(self.epoch + 1, self.model_info['num_epochs']))
+        print("Epoch [{}/{}]".format(self.epoch + 1, self.model_info['num_epochs']))
         self.model.eval()
         previous_idx = 0
 
@@ -283,13 +293,11 @@ class Training:
                 batch_loss += loss.item()
                 batch_count += 1
 
-                # Prints loss statistics and writes to the tensorboard after number of steps specified.
+                # Prints loss statistics after number of steps specified.
                 if (idx + 1)%self.params['display_stats_freq'] == 0:
                     print('Epoch {:02} | Batch {:03}-{:03} | Val. loss: {:.3f}'.
                           format(self.epoch + 1, previous_idx, idx, batch_loss / batch_count))
                     previous_idx = idx + 1
-                    self.tb_train_step += 1
-                    self.calculate_tb_stats(batch_loss / batch_count, is_train=True)
                     batch_loss = 0
                     batch_count = 0
 
@@ -319,23 +327,19 @@ class Training:
         return epoch_loss, epoch_accuracy, epoch_f1_score
 
 
-    def calculate_tb_stats(self, batch_loss, is_train=True):
+    def calculate_tb_stats(self, train_loss, valid_loss, train_F1, valid_F1):
         '''Adds the statistics of metrics to the tensorboard'''
-        if is_train:
-            mode = 'Training'
-            step = self.tb_train_step
-        else:
-            mode = 'Validation'
-            step = self.tb_val_step
 
-        # Adds loss value to TensorBoard
-        self.writer.add_scalar(mode + '_Loss', batch_loss, step)
+        # Adds the metrics to TensorBoard
+        self.writer.add_scalar('Training' + '_Loss', train_loss, self.epoch + 1)
+        self.writer.add_scalar('Validation' + '_Loss', valid_loss, self.epoch + 1)
+        self.writer.add_scalar('Training' + '_F1', train_F1, self.epoch + 1)
+        self.writer.add_scalar('Validation' + '_F1', valid_F1, self.epoch + 1)
 
         # Adds all the network's trainable parameters to TensorBoard
-        if is_train:
-            for name, param in self.model.named_parameters():
-                self.writer.add_histogram(name, param, self.tb_train_step)
-                self.writer.add_histogram(f'{name}.grad', param.grad, self.tb_train_step)
+        for name, param in self.model.named_parameters():
+            self.writer.add_histogram(name, param, self.epoch + 1)
+            self.writer.add_histogram(f'{name}.grad', param.grad, self.epoch + 1)
 
 
     def load_pretrained_model(self):
@@ -406,66 +410,6 @@ class Prediction:
                       output_names=['output'],  # the model's output names
                       dynamic_axes={'input': {0: 'batch_size'},  # variable lenght axes
                                     'output': {0: 'batch_size'}})
-
-
-    def predict(self, test_loader):
-
-        # Reads params to check if any params have been changed by user
-        self.params = read_config(self.cfg_path)
-        self.model_p.eval()
-
-        start_time = time.time()
-        with torch.no_grad():
-            # initializing the metrics
-            total_accuracy = 0
-            total_f1_score = 0
-
-            for idx, (image, label) in enumerate(test_loader):
-                # image = image.float()
-                # label = label.long()
-                image = image.to(self.device)
-                label = label.to(self.device)
-                output = self.model_p(image)
-                # output = output[:,:,0,0]
-                label = label.float()
-                output_sigmoided = F.sigmoid(output)
-                output_sigmoided = (output_sigmoided > 0.5).float()
-
-                '''Metrics calculation'''
-                # [[TN, FP],
-                # [FN, TP]] for each class
-                crack_confusion, inactive_confusion = multilabel_confusion_matrix(label.cpu(), output_sigmoided.cpu())
-
-                TN = crack_confusion[0,0]
-                FP = crack_confusion[0,1]
-                FN = crack_confusion[1,0]
-                TP = crack_confusion[1,1]
-                accuracy_1 = (TP + TN) / (TP + TN + FP + FN + epsilon)
-                F1_1 = 2 * TP / (2*TP + FN + FP + epsilon)
-
-                TN = inactive_confusion[0,0]
-                FP = inactive_confusion[0,1]
-                FN = inactive_confusion[1,0]
-                TP = inactive_confusion[1,1]
-                accuracy_2 = (TP + TN) / (TP + TN + FP + FN + epsilon)
-                F1_2 = 2 * TP / (2*TP + FN + FP + epsilon)
-
-                total_accuracy += (accuracy_1 + accuracy_2) / 2
-                total_f1_score += (F1_1 + F1_2) / 2
-
-
-        final_accuracy = total_accuracy / len(test_loader)
-        final_f1_score  = total_f1_score / len(test_loader)
-        end_time = time.time()
-        test_mins, test_secs = self.epoch_time(start_time, end_time)
-
-        # Print the final accuracy and F1 score
-        print('\n----------------------------------------------------------------------')
-        print(f'Testing for the SemEval 2014 and 2015 gold data | Testing Time: {test_mins}m {test_secs}s')
-        print(f'\tTesting Acc: {final_accuracy * 100:.2f}% | Testing F1: {final_f1_score:.3f}')
-        print('----------------------------------------------------------------------\n')
-
-
 
 
 

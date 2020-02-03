@@ -21,3 +21,4 @@
 /models/resnet_official.py
 /utils/__pycache__/
 /utils/data/tensor_board_logs/
+/data/best model/checkpoint.onnx

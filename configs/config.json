@@ -3,7 +3,7 @@
     "seed": 1
   },
   "display_stats_freq": 10,
-  "network_save_freq": 50,
+  "network_save_freq": 20,
   "input_data_path": "/home/soroosh/Documents/Repositories/deep_learning_challenge/data/",
   "input_csv_path": "/home/soroosh/Documents/Repositories/deep_learning_challenge/data/train.csv",
   "network_output_path": "./data/network_data/",
