@@ -108,7 +108,7 @@ class ChallengeDataset(Dataset):
 def get_train_dataset(cfg_path, valid_split_ratio):
     # since all the images are 300 * 300, we don't need resizing
     trans = transforms.Compose([transforms.ToPILImage(), transforms.RandomVerticalFlip(p=0.5),
-                                transforms.RandomHorizontalFlip(p=0.5), transforms.RandomRotation(degrees=[90, 180]), transforms.ToTensor(),
+                                transforms.RandomHorizontalFlip(p=0.5), transforms.ToTensor(),
                                 transforms.Normalize(train_mean, train_std)])
     return ChallengeDataset(cfg_path=cfg_path,
                             valid_split_ratio=valid_split_ratio, transform=trans, mode=Mode.TRAIN)

@@ -28,7 +28,7 @@ class Training:
     '''
     This class represents training (including validation) process.
     '''
-    def __init__(self, cfg_path, stopping_patience, torch_seed=None):
+    def __init__(self, cfg_path, stopping_patience, num_epochs=10, RESUME=False, torch_seed=None):
         '''
         :cfg_path (string): path of the experiment config file
         :torch_seed (int): Seed used for random generators in PyTorch functions
@@ -37,15 +37,20 @@ class Training:
         '''
         self.params = read_config(cfg_path)
         self.cfg_path = cfg_path
-        self.model_info = self.params['Network']
-        self.model_info['seed'] = torch_seed or self.model_info['seed']
+        self.RESUME = RESUME
+        self.best_loss = float('inf')
 
-        if 'trained_time' in self.model_info:
-            self.raise_training_complete_exception()
+        if RESUME == False:
+            self.model_info = self.params['Network']
+            self.model_info['seed'] = torch_seed or self.model_info['seed']
+            self.epoch = 0
+            self.num_epochs = num_epochs
 
-        self.setup_cuda()
-        self.stopper = EarlyStoppingCallback(patience=stopping_patience)
-        self.writer = SummaryWriter(log_dir=os.path.join(self.params['tb_logs_path']))
+            if 'trained_time' in self.model_info:
+                self.raise_training_complete_exception()
+
+            self.setup_cuda()
+            self.writer = SummaryWriter(log_dir=os.path.join(self.params['tb_logs_path']))
 
     def setup_cuda(self, cuda_device_id=0):
         if torch.cuda.is_available():
@@ -85,6 +90,24 @@ class Training:
         write_config(self.params, self.cfg_path, sort_keys=True)
 
 
+    def load_checkpoint(self, model, optimiser, optimiser_params, loss_function, pos_weight=None):
+
+        checkpoint = torch.load(self.params['network_output_path'] + '/' + self.params['checkpoint_name'])
+        self.device = None
+        self.model_info = checkpoint['model_info']
+        self.setup_cuda()
+        self.model = model.to(self.device)
+        self.optimiser = optimiser(self.model.parameters(), **optimiser_params)
+        self.loss_function = loss_function(pos_weight=pos_weight.to(self.device))
+
+        self.model.load_state_dict(checkpoint['model_state_dict'])
+        self.optimiser.load_state_dict(checkpoint['optimizer_state_dict'])
+        self.epoch = checkpoint['epoch']
+        self.num_epochs = checkpoint['num_epoch']
+        self.loss_function = checkpoint['loss']
+        self.best_loss = checkpoint['best_loss']
+        self.writer = SummaryWriter(log_dir=os.path.join(self.params['tb_logs_path']), purge_step=self.epoch + 1)
+
     def add_tensorboard_graph(self, model):
         '''Creates a tensor board graph for network visualisation'''
         dummy_input = torch.rand(1, 3, 300, 300)  # To show tensor sizes in graph
@@ -98,7 +121,7 @@ class Training:
         return elapsed_mins, elapsed_secs
 
 
-    def execute_training(self, train_loader, valid_loader=None, num_epochs=None, batch_size=1):
+    def execute_training(self, train_loader, valid_loader=None, batch_size=1):
         '''
         Executes training by running training and validation at each epoch
         '''
@@ -107,27 +130,24 @@ class Training:
         # reads param file again to include changes if any
         self.params = read_config(self.cfg_path)
 
-        # Checks if already trained
-        if 'trained_time' in self.model_info:
-            self.raise_training_complete_exception
+        if self.RESUME == False:
+            # Checks if already trained
+            if 'trained_time' in self.model_info:
+                self.raise_training_complete_exception
 
-        # CODE FOR CONFIG FILE TO RECORD MODEL PARAMETERS
-        self.model_info = self.params['Network']
-        self.model_info['num_epochs'] = num_epochs or self.model_info['num_epochs']
-
-        best_valid_F1 = 0.0
-        best_valid_loss = float('inf')
-        best_train_loss = float('inf')
-        self.epoch = 0
-        self.tb_train_step = 0
-        self.tb_val_step = 0
+            # CODE FOR CONFIG FILE TO RECORD MODEL PARAMETERS
+            self.model_info = self.params['Network']
+            self.model_info['num_epochs'] = self.num_epochs or self.model_info['num_epochs']
 
         print('Starting time:' + str(datetime.datetime.now()) +'\n')
-        for epoch in range(num_epochs):
-            self.epoch = epoch
+
+        for epoch in range(self.num_epochs - self.epoch):
+            self.epoch += 1
             start_time = time.time()
+
             print('Training (intermediate metrics):')
             train_loss, train_acc, train_F1 = self.train_epoch(train_loader, batch_size)
+
             if valid_loader:
                 print('\nValidation (intermediate metrics):')
                 valid_loss, valid_acc, valid_F1 = self.valid_epoch(valid_loader, batch_size)
@@ -136,37 +156,52 @@ class Training:
             epoch_mins, epoch_secs = self.epoch_time(start_time, end_time)
             total_mins, total_secs = self.epoch_time(total_start_time, end_time)
 
-            # Print accuracy, F1, and loss after each epoch
-            print('\n---------------------------------------------------------------')
-            print(f'Epoch: {self.epoch + 1:02} | Epoch Time: {epoch_mins}m {epoch_secs}s | '
-                  f'Total Time so far: {total_mins}m {total_secs}s')
-            print(f'\tTrain Loss: {train_loss:.3f} | Train Acc: {train_acc * 100:.2f}% | Train F1: {train_F1:.3f}')
-            if valid_loader:
-                print(f'\t Val. Loss: {valid_loss:.3f} |  Val. Acc: {valid_acc * 100:.2f}% |  Val. F1: {valid_F1:.3f}')
-            print('---------------------------------------------------------------\n')
-
             # Writes to the tensorboard after number of steps specified.
             if valid_loader:
                 self.calculate_tb_stats(train_loss, train_F1, valid_loss, valid_F1)
             else:
                 self.calculate_tb_stats(train_loss, train_F1)
 
+            # Saves information about training to config file
+            self.model_info['num_steps'] = self.epoch
+            self.model_info['trained_time'] = "{:%B %d, %Y, %H:%M:%S}".format(datetime.datetime.now())
+            self.params['Network'] = self.model_info
+            write_config(self.params, self.cfg_path, sort_keys=True)
+
             '''Saving the model'''
             if valid_loader:
-                if valid_loss < best_valid_loss:
-                    best_valid_loss = valid_loss
+                if valid_loss < self.best_loss:
+                    self.best_loss = valid_loss
                     torch.save(self.model.state_dict(), self.params['network_output_path'] + '/' +
                                self.params['trained_model_name'])
             else:
-                if train_loss < best_train_loss:
-                    best_train_loss = train_loss
+                if train_loss < self.best_loss:
+                    self.best_loss = train_loss
                     torch.save(self.model.state_dict(), self.params['network_output_path'] + '/' +
                                self.params['trained_model_name'])
 
-            # Saving a specific epoch
-            if (epoch + 1) % self.params['network_save_freq'] == 0:
+            # Saving every 20 epochs
+            if (self.epoch) % self.params['network_save_freq'] == 0:
                 torch.save(self.model.state_dict(), self.params['network_output_path'] + '/' +
-                           'epoch{}_'.format(epoch + 1) + self.params['trained_model_name'])
+                           'epoch{}_'.format(self.epoch) + self.params['trained_model_name'])
+
+            # Save a checkpoint
+            torch.save({'epoch': self.epoch,
+                'model_state_dict': self.model.state_dict(),
+                'optimizer_state_dict': self.optimiser.state_dict(),
+                'loss': self.loss_function, 'num_epoch': self.num_epochs,
+                'model_info': self.model_info, 'best_loss': self.best_loss},
+                self.params['network_output_path'] + '/' + self.params['checkpoint_name'])
+
+            # Print accuracy, F1, and loss after each epoch
+            print('\n---------------------------------------------------------------')
+            print(f'Epoch: {self.epoch:02} | Epoch Time: {epoch_mins}m {epoch_secs}s | '
+                  f'Total Time so far: {total_mins}m {total_secs}s')
+            print(f'\tTrain Loss: {train_loss:.3f} | Train Acc: {train_acc * 100:.2f}% | Train F1: {train_F1:.3f}')
+            if valid_loader:
+                print(f'\t Val. Loss: {valid_loss:.3f} |  Val. Acc: {valid_acc * 100:.2f}% |  Val. F1: {valid_F1:.3f}')
+            print('---------------------------------------------------------------\n')
+
 
             #TODO: earlystoping goes here!
             # best_valid_loss = self.stopper.step(current_loss=valid_loss, best_loss=best_valid_loss)
@@ -174,19 +209,12 @@ class Training:
             # if stopping_flag == True:
             #     break
 
-        # Saves information about training to config file
-        self.model_info['num_steps'] = self.epoch
-        self.model_info['trained_time'] = "{:%B %d, %Y, %H:%M:%S}".format(datetime.datetime.now())
-        self.params['Network'] = self.model_info
-
-        write_config(self.params, self.cfg_path, sort_keys=True)
-
 
     def train_epoch(self, train_loader, batch_size):
         '''
         Train using one single iteration of all messages (epoch) in dataset
         '''
-        print("Epoch [{}/{}]".format(self.epoch +1, self.model_info['num_epochs']))
+        print("Epoch [{}/{}]".format(self.epoch, self.model_info['num_epochs']))
         self.model.train()
         previous_idx = 0
 
@@ -233,7 +261,7 @@ class Training:
                 # Prints loss statistics after number of steps specified.
                 if (idx + 1)%self.params['display_stats_freq'] == 0:
                     print('Epoch {:02} | Batch {:03}-{:03} | Train loss: {:.3f}'.
-                          format(self.epoch + 1, previous_idx, idx, batch_loss / batch_count))
+                          format(self.epoch, previous_idx, idx, batch_loss / batch_count))
                     previous_idx = idx + 1
                     batch_loss = 0
                     batch_count = 0
@@ -266,7 +294,7 @@ class Training:
 
     def valid_epoch(self, valid_loader, batch_size):
         '''Test (validation) model after an epoch and calculate loss on test dataset'''
-        print("Epoch [{}/{}]".format(self.epoch + 1, self.model_info['num_epochs']))
+        print("Epoch [{}/{}]".format(self.epoch, self.model_info['num_epochs']))
         self.model.eval()
         previous_idx = 0
 
@@ -304,7 +332,7 @@ class Training:
                 # Prints loss statistics after number of steps specified.
                 if (idx + 1)%self.params['display_stats_freq'] == 0:
                     print('Epoch {:02} | Batch {:03}-{:03} | Val. loss: {:.3f}'.
-                          format(self.epoch + 1, previous_idx, idx, batch_loss / batch_count))
+                          format(self.epoch, previous_idx, idx, batch_loss / batch_count))
                     previous_idx = idx + 1
                     batch_loss = 0
                     batch_count = 0
@@ -339,16 +367,16 @@ class Training:
         '''Adds the statistics of metrics to the tensorboard'''
 
         # Adds the metrics to TensorBoard
-        self.writer.add_scalar('Training' + '_Loss', train_loss, self.epoch + 1)
-        self.writer.add_scalar('Training' + '_F1', train_F1, self.epoch + 1)
+        self.writer.add_scalar('Training' + '_Loss', train_loss, self.epoch)
+        self.writer.add_scalar('Training' + '_F1', train_F1, self.epoch)
         if valid_loss:
-            self.writer.add_scalar('Validation' + '_Loss', valid_loss, self.epoch + 1)
-            self.writer.add_scalar('Validation' + '_F1', valid_F1, self.epoch + 1)
+            self.writer.add_scalar('Validation' + '_Loss', valid_loss, self.epoch)
+            self.writer.add_scalar('Validation' + '_F1', valid_F1, self.epoch)
 
         # Adds all the network's trainable parameters to TensorBoard
         for name, param in self.model.named_parameters():
-            self.writer.add_histogram(name, param, self.epoch + 1)
-            self.writer.add_histogram(f'{name}.grad', param.grad, self.epoch + 1)
+            self.writer.add_histogram(name, param, self.epoch)
+            self.writer.add_histogram(f'{name}.grad', param.grad, self.epoch)
 
 
     def load_pretrained_model(self):
@@ -402,6 +430,7 @@ class Prediction:
 
         # Loads model from model_file_name and default network_output_path
         self.model_p.load_state_dict(torch.load(self.params['network_output_path'] + "/" + model_file_name))
+        # self.model_p.load_state_dict(torch.load(self.params['network_output_path'] + "/epoch120_" + model_file_name))
 
 
     def save_onnx(self, fn):
