@@ -29,11 +29,11 @@ def main_train():
     '''Main function for training + validation'''
 
     '''Hyper-parameters'''
-    NUM_EPOCH = 100
+    NUM_EPOCH = 200
     LOSS_FUNCTION = BCEWithLogitsLoss
     OPTIMIZER = optim.Adam
-    VALID_SPLIT_RATIO = 0.2
-    parameters = dict(lr = [8e-5], batch_size = [32])
+    VALID_SPLIT_RATIO = 0.1
+    parameters = dict(lr = [5e-5], batch_size = [32])
     param_values = [v for v in parameters.values()]
 
     '''Hyper-parameter testing'''
@@ -44,16 +44,20 @@ def main_train():
 
         '''Prepare data'''
         train_dataset = get_train_dataset(cfg_path, valid_split_ratio=VALID_SPLIT_RATIO)
-        valid_dataset = get_validation_dataset(cfg_path, valid_split_ratio=VALID_SPLIT_RATIO)
         pos_weight = train_dataset.pos_weight()
         train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=BATCH_SIZE,
                                                    drop_last=False, shuffle=True, num_workers=4)
-        valid_loader = torch.utils.data.DataLoader(dataset=valid_dataset, batch_size=BATCH_SIZE,
-                                                   drop_last=True, shuffle=False, num_workers=4)
+        if VALID_SPLIT_RATIO != 0:
+            valid_dataset = get_validation_dataset(cfg_path, valid_split_ratio=VALID_SPLIT_RATIO)
+            valid_loader = torch.utils.data.DataLoader(dataset=valid_dataset, batch_size=BATCH_SIZE,
+                                                       drop_last=True, shuffle=False, num_workers=4)
+        else:
+            valid_loader = None
+
         '''Initialize trainer'''
         trainer = Training(cfg_path, stopping_patience=10)
         '''Define model parameters'''
-        optimiser_params = {'lr': lr}
+        optimiser_params = {'lr': lr, 'weight_decay': 1e-5}
         MODEL = ResNet()
         trainer.setup_model(model=MODEL, optimiser=OPTIMIZER,
                             optimiser_params=optimiser_params, loss_function=LOSS_FUNCTION, pos_weight=pos_weight)
@@ -64,7 +68,7 @@ def main_train():
 
 def main_test():
     '''Main function for prediction'''
-    EXPERIMENT_NAME = 'Adam_lr7e-05'
+    EXPERIMENT_NAME = 'Adam_lr5e-05'
     params = open_experiment(EXPERIMENT_NAME)
     cfg_path = params['cfg_path']
 
@@ -77,14 +81,14 @@ def main_test():
 
 def experiment_deleter():
     '''Use below lines if you want to delete an experiment and reuse the same experiment name'''
-    parameters = dict(lr = [8e-4], batch_size = [1])
+    parameters = dict(lr = [5e-5], batch_size = [1])
     param_values = [v for v in parameters.values()]
     for lr, BATCH_SIZE in product(*param_values):
-        delete_experiment("newAdam_lr" + str(lr))
+        delete_experiment("Adam_lr" + str(lr))
 
 
 
 if __name__ == '__main__':
-    # experiment_deleter()
+    experiment_deleter()
     main_train()
     # main_test()

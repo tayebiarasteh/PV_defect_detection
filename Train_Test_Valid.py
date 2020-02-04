@@ -5,7 +5,6 @@
 #System Modules
 from enum import Enum
 import datetime
-from tqdm.autonotebook import tqdm
 import os
 import time
 
@@ -118,6 +117,7 @@ class Training:
 
         best_valid_F1 = 0.0
         best_valid_loss = float('inf')
+        best_train_loss = float('inf')
         self.epoch = 0
         self.tb_train_step = 0
         self.tb_val_step = 0
@@ -134,28 +134,39 @@ class Training:
 
             end_time = time.time()
             epoch_mins, epoch_secs = self.epoch_time(start_time, end_time)
+            total_mins, total_secs = self.epoch_time(total_start_time, end_time)
 
             # Print accuracy, F1, and loss after each epoch
             print('\n---------------------------------------------------------------')
-            print(f'Epoch: {self.epoch + 1:02} | Epoch Time: {epoch_mins}m {epoch_secs}s')
+            print(f'Epoch: {self.epoch + 1:02} | Epoch Time: {epoch_mins}m {epoch_secs}s | '
+                  f'Total Time so far: {total_mins}m {total_secs}s')
             print(f'\tTrain Loss: {train_loss:.3f} | Train Acc: {train_acc * 100:.2f}% | Train F1: {train_F1:.3f}')
             if valid_loader:
                 print(f'\t Val. Loss: {valid_loss:.3f} |  Val. Acc: {valid_acc * 100:.2f}% |  Val. F1: {valid_F1:.3f}')
             print('---------------------------------------------------------------\n')
 
             # Writes to the tensorboard after number of steps specified.
-            self.calculate_tb_stats(train_loss, valid_loss, train_F1, valid_F1)
+            if valid_loader:
+                self.calculate_tb_stats(train_loss, train_F1, valid_loss, valid_F1)
+            else:
+                self.calculate_tb_stats(train_loss, train_F1)
 
             '''Saving the model'''
-            if valid_loss > best_valid_loss:
-                best_valid_loss = valid_loss
-                torch.save(self.model.state_dict(), self.params['network_output_path'] + '/' +
-                           self.params['trained_model_name'])
+            if valid_loader:
+                if valid_loss < best_valid_loss:
+                    best_valid_loss = valid_loss
+                    torch.save(self.model.state_dict(), self.params['network_output_path'] + '/' +
+                               self.params['trained_model_name'])
+            else:
+                if train_loss < best_train_loss:
+                    best_train_loss = train_loss
+                    torch.save(self.model.state_dict(), self.params['network_output_path'] + '/' +
+                               self.params['trained_model_name'])
 
             # Saving a specific epoch
             if (epoch + 1) % self.params['network_save_freq'] == 0:
                 torch.save(self.model.state_dict(), self.params['network_output_path'] + '/' +
-                           self.params['trained_model_name'] + '_epoch{}'.format(epoch + 1))
+                           'epoch{}_'.format(epoch + 1) + self.params['trained_model_name'])
 
             #TODO: earlystoping goes here!
             # best_valid_loss = self.stopper.step(current_loss=valid_loss, best_loss=best_valid_loss)
@@ -169,9 +180,6 @@ class Training:
         self.params['Network'] = self.model_info
 
         write_config(self.params, self.cfg_path, sort_keys=True)
-        total_end_time = time.time()
-        epoch_mins, epoch_secs = self.epoch_time(total_start_time, total_end_time)
-        print(f'\nTotal Time: {epoch_mins}m {epoch_secs}s')
 
 
     def train_epoch(self, train_loader, batch_size):
@@ -327,14 +335,15 @@ class Training:
         return epoch_loss, epoch_accuracy, epoch_f1_score
 
 
-    def calculate_tb_stats(self, train_loss, valid_loss, train_F1, valid_F1):
+    def calculate_tb_stats(self, train_loss, train_F1, valid_loss=None, valid_F1=None):
         '''Adds the statistics of metrics to the tensorboard'''
 
         # Adds the metrics to TensorBoard
         self.writer.add_scalar('Training' + '_Loss', train_loss, self.epoch + 1)
-        self.writer.add_scalar('Validation' + '_Loss', valid_loss, self.epoch + 1)
         self.writer.add_scalar('Training' + '_F1', train_F1, self.epoch + 1)
-        self.writer.add_scalar('Validation' + '_F1', valid_F1, self.epoch + 1)
+        if valid_loss:
+            self.writer.add_scalar('Validation' + '_Loss', valid_loss, self.epoch + 1)
+            self.writer.add_scalar('Validation' + '_F1', valid_F1, self.epoch + 1)
 
         # Adds all the network's trainable parameters to TensorBoard
         for name, param in self.model.named_parameters():

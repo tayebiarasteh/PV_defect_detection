@@ -49,8 +49,12 @@ class ChallengeDataset(Dataset):
             reader = csv.DictReader(csv_file, delimiter=';')
             for row in reader:
                 self.input_list.append(row)
-        self.train_list, self.valid_list = train_test_split(
-            self.input_list, test_size=valid_split_ratio, random_state=seed)
+
+        if valid_split_ratio == 0:
+            self.train_list = self.input_list
+        else:
+            self.train_list, self.valid_list = train_test_split(
+                self.input_list, test_size=valid_split_ratio, random_state=seed)
 
         for row in self.train_list:
             self.sum_crack += int(row['crack'])
@@ -104,7 +108,7 @@ class ChallengeDataset(Dataset):
 def get_train_dataset(cfg_path, valid_split_ratio):
     # since all the images are 300 * 300, we don't need resizing
     trans = transforms.Compose([transforms.ToPILImage(), transforms.RandomVerticalFlip(p=0.5),
-                                transforms.RandomHorizontalFlip(p=0.5), transforms.ToTensor(),
+                                transforms.RandomHorizontalFlip(p=0.5), transforms.RandomRotation(degrees=[90, 180]), transforms.ToTensor(),
                                 transforms.Normalize(train_mean, train_std)])
     return ChallengeDataset(cfg_path=cfg_path,
                             valid_split_ratio=valid_split_ratio, transform=trans, mode=Mode.TRAIN)

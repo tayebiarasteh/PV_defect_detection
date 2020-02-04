@@ -22,3 +22,4 @@
 /utils/__pycache__/
 /utils/data/tensor_board_logs/
 /data/best model/checkpoint.onnx
+/data/best model/
