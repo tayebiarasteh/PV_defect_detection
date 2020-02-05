@@ -243,11 +243,11 @@ class Training:
 
                 # saving the logits and labels of this batch
                 for i, batch in enumerate(output_sigmoided):
-                    logits_with_sigmoid_cache[idx * 4 + i] = batch
+                    logits_with_sigmoid_cache[idx * batch_size + i] = batch
                 for i, batch in enumerate(output):
-                    logits_no_sigmoid_cache[idx * 4 + i] = batch
+                    logits_no_sigmoid_cache[idx * batch_size + i] = batch
                 for i, batch in enumerate(label):
-                    labels_cache[idx * 4 + i] = batch
+                    labels_cache[idx * batch_size + i] = batch
 
                 # Loss
                 loss = self.loss_function(output, label)
@@ -318,11 +318,11 @@ class Training:
 
                 # saving the logits and labels of this batch
                 for i, batch in enumerate(output_sigmoided):
-                    logits_with_sigmoid_cache[idx * 4 + i] = batch
+                    logits_with_sigmoid_cache[idx * batch_size + i] = batch
                 for i, batch in enumerate(output):
-                    logits_no_sigmoid_cache[idx * 4 + i] = batch
+                    logits_no_sigmoid_cache[idx * batch_size + i] = batch
                 for i, batch in enumerate(label):
-                    labels_cache[idx * 4 + i] = batch
+                    labels_cache[idx * batch_size + i] = batch
 
                 # Loss
                 loss = self.loss_function(output, label)
