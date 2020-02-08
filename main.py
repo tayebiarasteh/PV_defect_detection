@@ -35,11 +35,11 @@ def main_train():
     NUM_EPOCH = 200
     LOSS_FUNCTION = BCEWithLogitsLoss
     OPTIMIZER = optim.Adam
-    lr = 8e-5
+    lr = 7e-5
     optimiser_params = {'lr': lr}
     VALID_SPLIT_RATIO = 0.2
     BATCH_SIZE = 32
-    EXPERIMENT_NAME = "pretrained_Adam_lr" + str(lr)
+    EXPERIMENT_NAME = "resnet152_pretrained_Adam_lr" + str(lr)
 
     if RESUME == True:
         params = open_experiment(EXPERIMENT_NAME)
@@ -68,7 +68,7 @@ def main_train():
     # MODEL = ResNet()
 
     # or use a pre-trained model; you should fine-tune it inside the below function
-    MODEL = trainer.load_pretrained_model()
+    MODEL = load_pretrained_model()
 
     if RESUME == True:
         trainer.load_checkpoint(model=MODEL, optimiser=OPTIMIZER,
@@ -85,7 +85,7 @@ def main_train():
 
 def main_test():
     '''Main function for prediction'''
-    EXPERIMENT_NAME = 'Adam_lr1e-05'
+    EXPERIMENT_NAME = 'fullresnet_pretrained_Adam_lr7e-05'
     params = open_experiment(EXPERIMENT_NAME)
     cfg_path = params['cfg_path']
 
@@ -98,14 +98,14 @@ def main_test():
 
 def experiment_deleter():
     '''Use below lines if you want to delete an experiment and reuse the same experiment name'''
-    parameters = dict(lr = [8e-5], batch_size = [1])
+    parameters = dict(lr = [7e-5], batch_size = [1])
     param_values = [v for v in parameters.values()]
     for lr, BATCH_SIZE in product(*param_values):
-        delete_experiment("pretrained_Adam_lr" + str(lr))
+        delete_experiment("resnet152_pretrained_Adam_lr" + str(lr))
 
 
 
 if __name__ == '__main__':
-    experiment_deleter()
-    main_train()
-    # main_test()
+    # experiment_deleter()
+    # main_train()
+    main_test()

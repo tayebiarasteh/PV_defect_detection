@@ -40,6 +40,7 @@ class Training:
         self.cfg_path = cfg_path
         self.RESUME = RESUME
         self.best_loss = float('inf')
+        self.best_F1 = 0
 
         if RESUME == False:
             self.model_info = self.params['Network']
@@ -107,6 +108,7 @@ class Training:
         self.num_epochs = checkpoint['num_epoch']
         self.loss_function = checkpoint['loss']
         self.best_loss = checkpoint['best_loss']
+        self.best_F1 = checkpoint['best_F1']
         self.writer = SummaryWriter(log_dir=os.path.join(self.params['tb_logs_path']), purge_step=self.epoch + 1)
 
     def add_tensorboard_graph(self, model):
@@ -180,6 +182,11 @@ class Training:
                     self.best_loss = train_loss
                     torch.save(self.model.state_dict(), self.params['network_output_path'] + '/' +
                                self.params['trained_model_name'])
+            # Saving based on the F1 score
+            if valid_F1 > self.best_F1:
+                self.best_F1 = valid_F1
+                torch.save(self.model.state_dict(), self.params['network_output_path'] + '/F1based_' +
+                           self.params['trained_model_name'])
 
             # Saving every 20 epochs
             if (self.epoch) % self.params['network_save_freq'] == 0:
@@ -187,7 +194,7 @@ class Training:
                            'epoch{}_'.format(self.epoch) + self.params['trained_model_name'])
 
             # Save a checkpoint
-            torch.save({'epoch': self.epoch,
+            torch.save({'epoch': self.epoch, 'best_F1': self.best_F1,
                 'model_state_dict': self.model.state_dict(),
                 'optimizer_state_dict': self.optimiser.state_dict(),
                 'loss': self.loss_function, 'num_epoch': self.num_epochs,
@@ -375,22 +382,6 @@ class Training:
             self.writer.add_scalar('Validation' + '_F1', valid_F1, self.epoch)
 
 
-    def load_pretrained_model(self):
-        # Load a pre-trained model from config file
-        # self.model.load_state_dict(torch.load(self.model_info['pretrain_model_path']))
-
-        # Load a pre-trained model from Torchvision
-        MODEL = models.resnet152(pretrained=True)
-        for param in MODEL.parameters():
-            param.requires_grad = False
-        MODEL.fc = nn.Sequential(
-            nn.Linear(2048, 2))
-        for param in MODEL.fc.parameters():
-            param.requires_grad = True
-
-        return MODEL
-
-
     def raise_training_complete_exception(self):
         raise Exception("Model has already been trained on {}. \n"
                         "1.To use this model as pre trained model and train again\n "
@@ -398,6 +389,22 @@ class Training:
                         "2.To start fresh with same experiment name, delete the experiment  \n"
                         "using delete_experiment function and create experiment "
                         "               again.".format(self.model_info['trained_time']))
+
+
+def load_pretrained_model():
+    # Load a pre-trained model from config file
+    # self.model.load_state_dict(torch.load(self.model_info['pretrain_model_path']))
+
+    # Load a pre-trained model from Torchvision
+    MODEL = models.resnet34(pretrained=True)
+    # for param in MODEL.parameters():
+    #     param.requires_grad = False
+    MODEL.fc = nn.Sequential(
+        nn.Linear(512, 2))
+    for param in MODEL.fc.parameters():
+        param.requires_grad = True
+
+    return MODEL
 
 
 
@@ -434,11 +441,15 @@ class Prediction:
     def setup_model(self, model, model_file_name=None):
         if model_file_name == None:
             model_file_name = self.params['trained_model_name']
-        self.model_p = model().to(self.device)
+
+        # in case of pretrained model
+        model = load_pretrained_model()
+
+        self.model_p = model.to(self.device)
 
         # Loads model from model_file_name and default network_output_path
         # self.model_p.load_state_dict(torch.load(self.params['network_output_path'] + "/" + model_file_name))
-        self.model_p.load_state_dict(torch.load(self.params['network_output_path'] + "/epoch180_" + model_file_name))
+        self.model_p.load_state_dict(torch.load(self.params['network_output_path'] + "/epoch60_" + model_file_name))
 
 
     def save_onnx(self, fn):
