@@ -35,17 +35,17 @@ def main_train():
     NUM_EPOCH = 200
     LOSS_FUNCTION = BCEWithLogitsLoss
     OPTIMIZER = optim.Adam
+    lr = 8e-5
+    optimiser_params = {'lr': lr}
     VALID_SPLIT_RATIO = 0.2
-    lr = 5e-5
     BATCH_SIZE = 32
-
+    EXPERIMENT_NAME = "pretrained_Adam_lr" + str(lr)
 
     if RESUME == True:
-        EXPERIMENT_NAME = 'Adam_lr5e-05'
         params = open_experiment(EXPERIMENT_NAME)
     else:
         # put the new experiment name here.
-        params = create_experiment("Adam_lr" + str(lr))
+        params = create_experiment(EXPERIMENT_NAME)
     cfg_path = params["cfg_path"]
 
     # Prepare data
@@ -62,9 +62,13 @@ def main_train():
 
     # Initialize trainer
     trainer = Training(cfg_path, stopping_patience=10, num_epochs=NUM_EPOCH, RESUME=RESUME)
-    # Define model parameters
-    optimiser_params = {'lr': lr, 'weight_decay': 1e-5}
-    MODEL = ResNet()
+
+    '''Define the model'''
+    # Use the user-defined model
+    # MODEL = ResNet()
+
+    # or use a pre-trained model; you should fine-tune it inside the below function
+    MODEL = trainer.load_pretrained_model()
 
     if RESUME == True:
         trainer.load_checkpoint(model=MODEL, optimiser=OPTIMIZER,
@@ -81,7 +85,7 @@ def main_train():
 
 def main_test():
     '''Main function for prediction'''
-    EXPERIMENT_NAME = 'Adam_lr5e-05'
+    EXPERIMENT_NAME = 'Adam_lr1e-05'
     params = open_experiment(EXPERIMENT_NAME)
     cfg_path = params['cfg_path']
 
@@ -94,14 +98,14 @@ def main_test():
 
 def experiment_deleter():
     '''Use below lines if you want to delete an experiment and reuse the same experiment name'''
-    parameters = dict(lr = [5e-5], batch_size = [1])
+    parameters = dict(lr = [8e-5], batch_size = [1])
     param_values = [v for v in parameters.values()]
     for lr, BATCH_SIZE in product(*param_values):
-        delete_experiment("Adam_lr" + str(lr))
+        delete_experiment("pretrained_Adam_lr" + str(lr))
 
 
 
 if __name__ == '__main__':
-    # experiment_deleter()
-    # main_train()
-    main_test()
+    experiment_deleter()
+    main_train()
+    # main_test()

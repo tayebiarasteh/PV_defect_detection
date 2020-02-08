@@ -14,6 +14,7 @@ import torch
 import torch.nn as nn
 from sklearn.metrics import multilabel_confusion_matrix
 import torch.nn.functional as F
+from torchvision import models
 
 # User Defined Modules
 from configs.serde import *
@@ -373,15 +374,22 @@ class Training:
             self.writer.add_scalar('Validation' + '_Loss', valid_loss, self.epoch)
             self.writer.add_scalar('Validation' + '_F1', valid_F1, self.epoch)
 
-        # Adds all the network's trainable parameters to TensorBoard
-        for name, param in self.model.named_parameters():
-            self.writer.add_histogram(name, param, self.epoch)
-            self.writer.add_histogram(f'{name}.grad', param.grad, self.epoch)
-
 
     def load_pretrained_model(self):
-        '''Load pre trained model to the using pre-trained_model_path parameter from config file'''
-        self.model.load_state_dict(torch.load(self.model_info['pretrain_model_path']))
+        # Load a pre-trained model from config file
+        # self.model.load_state_dict(torch.load(self.model_info['pretrain_model_path']))
+
+        # Load a pre-trained model from Torchvision
+        MODEL = models.resnet152(pretrained=True)
+        for param in MODEL.parameters():
+            param.requires_grad = False
+        MODEL.fc = nn.Sequential(
+            nn.Linear(2048, 2))
+        for param in MODEL.fc.parameters():
+            param.requires_grad = True
+
+        return MODEL
+
 
     def raise_training_complete_exception(self):
         raise Exception("Model has already been trained on {}. \n"
@@ -429,8 +437,8 @@ class Prediction:
         self.model_p = model().to(self.device)
 
         # Loads model from model_file_name and default network_output_path
-        self.model_p.load_state_dict(torch.load(self.params['network_output_path'] + "/" + model_file_name))
-        # self.model_p.load_state_dict(torch.load(self.params['network_output_path'] + "/epoch120_" + model_file_name))
+        # self.model_p.load_state_dict(torch.load(self.params['network_output_path'] + "/" + model_file_name))
+        self.model_p.load_state_dict(torch.load(self.params['network_output_path'] + "/epoch180_" + model_file_name))
 
 
     def save_onnx(self, fn):
