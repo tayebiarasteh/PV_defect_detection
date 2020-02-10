@@ -19,7 +19,9 @@ However, we treat them as independent and only classify a cell as cracked if the
 
 Dataset
 ------
-A dataset of 2000 gray-scale 300 by 300 solar cell images is provided here by the [LME](https://lme.tf.fau.de/). The images are provided in png-format. The filenames and the corresponding labels are listed in the `train.csv`.
+A dataset of 2000 gray-scale 300 by 300 solar cell images is provided here by the [LME](https://lme.tf.fau.de/). The images are provided in png-format. The filenames and the corresponding labels are listed in the `train.csv`. An example image with inactive & cracked regoins is shown below,
+
+![](data/images/cell0040.png)
 
 Training
 ------
