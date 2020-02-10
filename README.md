@@ -30,7 +30,7 @@ A dataset of 2000 gray-scale 300 by 300 solar cell images is provided here by th
 Training
 ------
 
-The [ResNet18](https://arxiv.org/abs/1512.03385) architecture is implemented initially here in `./models`. But finally, the pre-trained [ResNet34](https://arxiv.org/abs/1512.03385) of `torch.utils.models` is used as the initial network architecture as it shows the best performance and trained with the following parameters,
+The [ResNet18](https://arxiv.org/abs/1512.03385) architecture is implemented initially here in `./models`. But finally, the pre-trained [ResNet34](https://arxiv.org/abs/1512.03385) of `torchvision.models` is used as the initial network architecture as it shows the best performance and trained with the following parameters,
 
 | Name        | Value           |
 | :-------------: |:-------------:| 
