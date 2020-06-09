@@ -47,7 +47,7 @@ Flipping is the only augmentation used on the trainning data.
 
 Results
 ------
-This repository ranked in **the 2nd place in the Deep Learning Challenge WS1920 of University of Erlangen-Nuremberg**. The trained model is tested on a second data set by the [LME](https://lme.tf.fau.de/) and the results are as follows,
+This repository ranked in **the top 3 best models in the Deep Learning Challenge WS1920 of University of Erlangen-Nuremberg**. The trained model is tested on a second data set by the [LME](https://lme.tf.fau.de/) and the results are as follows,
 
 | F1 score of crack | F1 score of inactive  | mean F1 score |
 | :-------------: |:-------------:|:-------------:|
