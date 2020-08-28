@@ -6,7 +6,7 @@
 [![MIT Licence](https://badges.frapsoft.com/os/mit/mit.svg?v=103)](https://opensource.org/licenses/mit-license.php)
 
 
-This project is a part of the programming exercises of the Deep Learning course (WS 2019-20) offered by the [Pattern Recognition Lab (LME)](https://lme.tf.fau.de/) of the [Computer Science Department](https://www.informatik.uni-erlangen.de/) at [University of Erlangen-Nuremberg (FAU)](https://www.fau.eu/).
+This project is a part of the programming exercises of the Deep Learning course (WS 2019-20, Prof. Dr.-Ing. habil. Andreas Maier) offered by the [Pattern Recognition Lab (LME)](https://lme.tf.fau.de/) of the [Computer Science Department](https://www.informatik.uni-erlangen.de/) at [University of Erlangen-Nuremberg (FAU)](https://www.fau.eu/).
 
 
 Introduction
