@@ -1,7 +1,7 @@
 """
 functions for writing/reading data to/from disk
 
-@author: Soroosh Tayebi Arasteh <soroosh.arasteh@fau.de>
+@modified by: Soroosh Tayebi Arasteh <soroosh.arasteh@fau.de>
 """
 
 import json
