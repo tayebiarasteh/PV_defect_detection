@@ -1,6 +1,6 @@
 # Multi-label defect detection for Solar Cells from Electroluminescence images of the modules, using Deep Learning
 
-### By [Soroosh Tayebi Arasteh](https://github.com/starasteh/)
+### By [Soroosh Tayebi Arasteh](https://github.com/starasteh/) | سروش طیبی آراسته
 
 [![Open Source Love](https://badges.frapsoft.com/os/v2/open-source.svg?v=103)](https://github.com/ellerbrock/open-source-badges/)
 [![MIT Licence](https://badges.frapsoft.com/os/mit/mit.svg?v=103)](https://opensource.org/licenses/mit-license.php)
