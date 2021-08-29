@@ -1,6 +1,9 @@
 """
+Created on January 2020.
+
 ResNet18
 @author: Soroosh Tayebi Arasteh <soroosh.arasteh@fau.de>
+https://github.com/tayebiarasteh/
 """
 
 import torch

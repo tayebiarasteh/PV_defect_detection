@@ -1,8 +1,11 @@
 '''
+Created on January 2020.
+
 This is the main function running the Training, Validation, Testing process.
 Set the hyper-parameters and model parameters here. [data parameters from config file]
 
 @author: Soroosh Tayebi Arasteh <soroosh.arasteh@fau.de>
+https://github.com/tayebiarasteh/
 '''
 
 # Deep Learning Modules
