@@ -41,13 +41,13 @@ Code structure
 
 Dataset
 ------
-A dataset of 2000 gray-scale 300 by 300 solar cell images is utilized. You can access the datasets from [here](https://github.com/zae-bayern/elpv-dataset/tree/master/images) and the labels from [here](https://github.com/zae-bayern/elpv-dataset). The images are provided in png-format. 3 example images are shown below. 
+A part of the ELPV dataset with around 2000 gray-scale 300 by 300 solar cell images is utilized. You can access the datasets from [here](https://github.com/zae-bayern/elpv-dataset/tree/master/images) and the labels from [here](https://github.com/zae-bayern/elpv-dataset). The images are provided in png-format. 3 example images are shown below. 
 - Top left image: inactive & cracked, top right image: cracked,
 - Below image: inactive.
 
-![](https://github.com/zae-bayern/elpv-dataset/tree/master/images/cell0040.png)
-![](https://github.com/zae-bayern/elpv-dataset/tree/master/images/cell0414.png)
-![](https://github.com/zae-bayern/elpv-dataset/tree/master/images/cell0203.png)
+![](https://github.com/zae-bayern/elpv-dataset/blob/master/images/cell0040.png)
+![](https://github.com/zae-bayern/elpv-dataset/blob/master/images/cell0414.png)
+![](https://github.com/zae-bayern/elpv-dataset/blob/master/images/cell0203.png)
 
 Training
 ------
