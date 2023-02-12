@@ -1,9 +1,7 @@
 # Multi-label defect detection for Solar Cells from Electroluminescence images of the modules, using Deep Learning
 
-### By [Soroosh Tayebi Arasteh](https://github.com/tayebiarasteh/) | سروش طیبی آراسته
+### By [Soroosh Tayebi Arasteh](https://github.com/tayebiarasteh/) 
 
-[![Open Source Love](https://badges.frapsoft.com/os/v2/open-source.svg?v=103)](https://github.com/ellerbrock/open-source-badges/)
-[![MIT Licence](https://badges.frapsoft.com/os/mit/mit.svg?v=103)](https://opensource.org/licenses/mit-license.php)
 
 
 This project is a part of the programming exercises of the Deep Learning course (WS 2019-20, Prof. Dr.-Ing. habil. Andreas Maier) offered by the [Pattern Recognition Lab (LME)](https://lme.tf.fau.de/) of the [Computer Science Department](https://www.informatik.uni-erlangen.de/) at [University of Erlangen-Nuremberg (FAU)](https://www.fau.eu/).
@@ -43,13 +41,13 @@ Code structure
 
 Dataset
 ------
-A dataset of 2000 gray-scale 300 by 300 solar cell images is provided here by the [LME](https://lme.tf.fau.de/). The images are provided in png-format. The filenames and the corresponding labels are listed in the `train.csv`. 3 example images are shown below. 
+A dataset of 2000 gray-scale 300 by 300 solar cell images is utilized. You can access the datasets from [here](https://github.com/zae-bayern/elpv-dataset/tree/master/images) and the labels from [here](https://github.com/zae-bayern/elpv-dataset). The images are provided in png-format. 3 example images are shown below. 
 - Top left image: inactive & cracked, top right image: cracked,
 - Below image: inactive.
 
-![](data/images/cell0040.png)
-![](data/images/cell0414.png)
-![](data/images/cell0203.png)
+![](https://github.com/zae-bayern/elpv-dataset/tree/master/images/cell0040.png)
+![](https://github.com/zae-bayern/elpv-dataset/tree/master/images/cell0414.png)
+![](https://github.com/zae-bayern/elpv-dataset/tree/master/images/cell0203.png)
 
 Training
 ------
