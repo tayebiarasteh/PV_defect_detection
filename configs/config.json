@@ -1,0 +1,14 @@
+{
+  "Network": {
+    "seed": 1
+  },
+  "display_stats_freq": 10,
+  "network_save_freq": 20,
+  "input_data_path": "/home/soroosh/Documents/Repositories/deep_learning_challenge/data/",
+  "input_csv_path": "/home/soroosh/Documents/Repositories/deep_learning_challenge/data/train.csv",
+  "network_output_path": "./data/network_data/",
+  "output_data_path": "./data/output_data/",
+  "tb_logs_path": "./data/tensor_board_logs/",
+  "checkpoint_name": "checkpoint.tar",
+  "trained_model_name": "trained_model.pth"
+}
